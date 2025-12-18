@@ -6,6 +6,10 @@ on:
       - 'v*.*.*'  # 触发条件: 推送 v0.0.1 等版本 tag
   workflow_dispatch:  # 允许手动触发
 
+permissions:
+  contents: write  # 允许创建 Release
+
+
 jobs:
   build-and-release:
     runs-on: windows-2022  # 使用 VS 2022 环境
