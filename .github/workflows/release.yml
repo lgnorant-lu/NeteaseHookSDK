@@ -1,0 +1,69 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # 触发条件: 推送 v0.0.1 等版本 tag
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  build-and-release:
+    runs-on: windows-2022  # 使用 VS 2022 环境
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Configure CMake
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -A x64
+    
+    - name: Build Release
+      run: |
+        cmake --build build --config Release
+    
+    - name: Install to Distribution Directory
+      run: |
+        cmake --install build --prefix ./dist/NeteaseHookSDK-${{ github.ref_name }} --config Release
+    
+    - name: Package Release
+      run: |
+        cd dist
+        Compress-Archive -Path NeteaseHookSDK-${{ github.ref_name }} -DestinationPath NeteaseHookSDK-${{ github.ref_name }}-windows-x64.zip
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/NeteaseHookSDK-${{ github.ref_name }}-windows-x64.zip
+        body: |
+          ## NeteaseHookSDK ${{ github.ref_name }}
+          
+          ### 📦 发布包内容
+          - `bin/` - DLL 文件 (NeteaseDriver.dll, version.dll)
+          - `include/` - C/C++ 头文件
+          - `lib/` - Import Library
+          - `docs/` - 完整文档
+          - `examples/` - C 语言示例代码
+          
+          ### 🔧 系统要求
+          - Windows 7+ (x64)
+          - MSVC Runtime (通常已预装)
+          - 网易云音乐客户端
+          
+          ### 📖 快速开始
+          1. 下载并解压 zip 包
+          2. 参考 `examples/c_demo.c` 集成到您的项目
+          3. 详细文档见 `docs/API.md`
+          
+          ### ⚖️ 许可证
+          MIT License - 仅供学习研究用途
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
