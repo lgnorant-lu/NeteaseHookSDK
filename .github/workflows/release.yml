@@ -45,28 +45,14 @@ jobs:
       with:
         files: |
           dist/NeteaseHookSDK-${{ github.ref_name }}-windows-x64.zip
+        generate_release_notes: true  # 自动生成变更日志 (基于 PR/Commit)
         body: |
           ## NeteaseHookSDK ${{ github.ref_name }}
           
-          ### 📦 发布包内容
-          - `bin/` - DLL 文件 (NeteaseDriver.dll, version.dll)
-          - `include/` - C/C++ 头文件
-          - `lib/` - Import Library
-          - `docs/` - 完整文档
-          - `examples/` - C 语言示例代码
+          详细文档与安装指南请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。
           
-          ### 🔧 系统要求
-          - Windows 7+ (x64)
-          - MSVC Runtime (通常已预装)
-          - 网易云音乐客户端
-          
-          ### 📖 快速开始
-          1. 下载并解压 zip 包
-          2. 参考 `examples/c_demo.c` 集成到您的项目
-          3. 详细文档见 `docs/API.md`
-          
-          ### ⚖️ 许可证
-          MIT License - 仅供学习研究用途
+          ### 📦 下载说明
+          请下载下方的 `NeteaseHookSDK-*-windows-x64.zip`，解压即可使用。
         draft: false
         prerelease: false
       env:

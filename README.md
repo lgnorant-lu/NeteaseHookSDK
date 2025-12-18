@@ -120,13 +120,38 @@ void Netease_SetTrackChangedCallback(Netease_Callback callback);
 bool Netease_InstallHook(const char* dllPath);
 ```
 
-## 7. 目录结构
-
+## 8. 发布包结构 (Release Package)
+ 
+从 GitHub Release 下载的压缩包 (`.zip`) 解压后包含以下目录：
+ 
+```text
+NeteaseHookSDK-v0.0.1/
+├── bin/                  # [运行时] 存放 DLL
+│   ├── NeteaseDriver.dll # SDK 核心驱动
+│   └── version.dll       # Agent (自动安装时使用)
+├── include/              # [开发] 头文件
+│   └── NeteaseDriver.h   # C/C++ 引用此头文件
+├── lib/                  # [开发] 静态导入库
+│   └── NeteaseDriver.lib # 链接时使用 (仅 MSVC)
+├── examples/             # [示例]
+│   └── c_demo.c          # C 语言调用范例
+└── docs/                 # [文档] 离线文档
+```
+ 
+### 快速使用指引
+1.  **运行**: 将 `bin/*.dll` 复制到程序运行目录。
+2.  **开发**: 
+    - 将 `include` 目录添加到编译器的 Include Path。
+    - 将 `lib` 目录添加到链接器的 Library Path。
+    - 链接 `NeteaseDriver.lib`。
+ 
+## 9. 目录结构 (源码)
+ 
 *   `src/Agent`: DLL 代理与 Hook 实现 (MinHook)
 *   `src/Driver`: CDP 协议驱动与状态机 (C++)
 *   `src/Shared`: 跨模块共享数据定义
 *   `examples`: 跨语言调用范例
-
-## 8. 法律免责
+ 
+## 10. 法律免责
 
 本项目仅供逆向工程研究与安全分析用途。使用本项目所产生的任何后果由使用者自行承担。
