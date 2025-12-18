@@ -1,6 +1,9 @@
 # NeteaseHookSDK (v0.0.1)
 
 **[状态: ACTIVE]** **[架构: Hybrid/CDP]** **[平台: Windows x64]**
+ 
+![NeteaseHookSDK Demo](demo.png)
+
 
 ## 1. 项目摘要
 
