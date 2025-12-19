@@ -3,7 +3,7 @@ name: Release Build
 on:
   push:
     tags:
-      - 'v*.*.*'  # 触发条件: 推送 v0.0.1 等版本 tag
+      - 'v*.*.*'  # 触发条件: 推送 v0.0.2 等版本 tag
   workflow_dispatch:  # 允许手动触发
 
 permissions:
@@ -13,6 +13,14 @@ permissions:
 jobs:
   build-and-release:
     runs-on: windows-2022  # 使用 VS 2022 环境
+    strategy:
+      matrix:
+        arch: [x64, Win32]  # Win32 = x86
+        include:
+          - arch: x64
+            arch_name: x64
+          - arch: Win32
+            arch_name: x86
     
     steps:
     - name: Checkout Code
@@ -23,28 +31,50 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
     
-    - name: Configure CMake
+    - name: Configure CMake (${{ matrix.arch_name }})
       run: |
-        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -A x64
+        cmake -B build-${{ matrix.arch_name }} -S . -DCMAKE_BUILD_TYPE=Release -A ${{ matrix.arch }}
     
-    - name: Build Release
+    - name: Build Release (${{ matrix.arch_name }})
       run: |
-        cmake --build build --config Release
+        cmake --build build-${{ matrix.arch_name }} --config Release
     
-    - name: Install to Distribution Directory
+    - name: Install to Distribution Directory (${{ matrix.arch_name }})
       run: |
-        cmake --install build --prefix ./dist/NeteaseHookSDK-${{ github.ref_name }} --config Release
+        cmake --install build-${{ matrix.arch_name }} --prefix ./dist/NeteaseHookSDK-${{ github.ref_name }} --config Release
+    
+    - name: Upload Artifacts (${{ matrix.arch_name }})
+      uses: actions/upload-artifact@v4
+      with:
+        name: bins-${{ matrix.arch_name }}
+        path: dist/
+        retention-days: 1
+
+  package-release:
+    needs: build-and-release
+    runs-on: windows-2022
+    steps:
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist/
+    
+    - name: Merge Architectures
+      run: |
+        New-Item -ItemType Directory -Force -Path merged
+        Copy-Item -Recurse -Path dist/bins-x86/* -Destination merged/
+        Copy-Item -Recurse -Path dist/bins-x64/* -Destination merged/
     
     - name: Package Release
       run: |
-        cd dist
-        Compress-Archive -Path NeteaseHookSDK-${{ github.ref_name }} -DestinationPath NeteaseHookSDK-${{ github.ref_name }}-windows-x64.zip
+        cd merged
+        Compress-Archive -Path NeteaseHookSDK-${{ github.ref_name }} -DestinationPath ../NeteaseHookSDK-${{ github.ref_name }}-windows-multiarch.zip
     
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          dist/NeteaseHookSDK-${{ github.ref_name }}-windows-x64.zip
+          NeteaseHookSDK-${{ github.ref_name }}-windows-multiarch.zip
         generate_release_notes: true  # 自动生成变更日志 (基于 PR/Commit)
         body: |
           ## NeteaseHookSDK ${{ github.ref_name }}
@@ -52,7 +82,12 @@ jobs:
           详细文档与安装指南请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。
           
           ### 📦 下载说明
-          请下载下方的 `NeteaseHookSDK-*-windows-x64.zip`，解压即可使用。
+          本版本同时包含 **x86** 和 **x64** 架构。SDK 会自动检测目标网易云音乐的架构并部署匹配的 DLL。
+          
+          ### ✨ v0.0.2 更新
+          - ✅ 支持 32 位 (x86) 应用程序
+          - ✅ 智能架构检测 (PE Header 分析)
+          - ✅ 标准化调用约定 (`__cdecl`)
         draft: false
         prerelease: false
       env:

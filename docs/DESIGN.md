@@ -84,3 +84,7 @@ SDK 内部维护一个独立的守护线程 (`MonitorLoop`)。
 目标应用使用自定义的事件总线。
 *   **Event**: `audioplayer.onPlayProgress`
 *   **Payload**: `{ type: "progress", songId: "...", progress: 123.45 }` (结构经 SDK 归一化处理)
+### 4.3 调用约定 (Calling Convention)
+为确保跨语言与跨编译器兼容性（特别是 x86 环境），所有导出函数强制采用 `__cdecl` 约定。
+*   宏定义: `#define NETEASE_API extern "C" __cdecl`
+*   目的: 防止 `stdcall` (WinAPI 默认) 与 `cdecl` (C/C++ 默认) 混用导致栈不平衡。

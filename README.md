@@ -1,6 +1,6 @@
-# NeteaseHookSDK (v0.0.1)
+# NeteaseHookSDK (v0.0.2)
 
-**[状态: ACTIVE]** **[架构: Hybrid/CDP]** **[平台: Windows x64]**
+**[状态: ACTIVE]** **[架构: Hybrid/CDP]** **[平台: Windows x86/x64]**
  
 ![NeteaseHookSDK Demo](demo.png)
 
@@ -11,7 +11,7 @@ NeteaseHookSDK 是针对网易云音乐 (Netease Cloud Music) 桌面客户端的
 
 通过利用 Electron 框架内置的 Chrome DevTools Protocol (CDP) 调试接口，本项目构建了一个非侵入式的 IPC 桥接层，实现了对目标进程内部 `window.channel` 通信总线的实时监听。
 
-**版本**: 0.0.1 (Alpha Release)
+**版本**: 0.0.2 (Multi-Arch Beta)
 
 ## 2. 技术规格
 
@@ -128,10 +128,14 @@ bool Netease_InstallHook(const char* dllPath);
 从 GitHub Release 下载的压缩包 (`.zip`) 解压后包含以下目录：
  
 ```text
-NeteaseHookSDK-v0.0.1/
-├── bin/                  # [运行时] 存放 DLL
-│   ├── NeteaseDriver.dll # SDK 核心驱动
-│   └── version.dll       # Agent (自动安装时使用)
+NeteaseHookSDK-v0.0.2/
+├── bin/
+│   ├── x86/              # [32位]
+│   │   ├── NeteaseDriver.dll
+│   │   └── version.dll
+│   └── x64/              # [64位]
+│       ├── NeteaseDriver.dll
+│       └── version.dll
 ├── include/              # [开发] 头文件
 │   └── NeteaseDriver.h   # C/C++ 引用此头文件
 ├── lib/                  # [开发] 静态导入库

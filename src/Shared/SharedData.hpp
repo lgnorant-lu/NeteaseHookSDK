@@ -3,7 +3,7 @@
 /**
  * SharedData.hpp - 共享数据结构定义
  * 
- * 网易云音乐 Hook SDK v0.0.1
+ * 网易云音乐 Hook SDK v0.0.2
  */
 
 namespace IPC {

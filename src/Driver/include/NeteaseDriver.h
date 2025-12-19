@@ -9,6 +9,15 @@
 // 前向声明
 class CDPController;
 
+// 调用约定宏 (Calling Convention)
+// 确保跨编译器/跨架构兼容性，特别是 x86 环境
+#ifdef _MSC_VER
+    #define NETEASE_API __cdecl
+#else
+    #define NETEASE_API
+#endif
+
+
 /**
  * NeteaseDriver - 网易云音乐播放状态监控 SDK
  * 

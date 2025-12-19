@@ -1,7 +1,7 @@
 /**
  * NeteaseDriver.cpp - 网易云音乐播放状态监控 SDK 实现
  * 
- * 网易云音乐 Hook SDK v0.0.1
+ * 网易云音乐 Hook SDK v0.0.2
  */
 
 #include "NeteaseDriver.h"
@@ -268,34 +268,103 @@ bool NeteaseDriver::IsHookInstalled() {
     return PathFileExistsA(dllPath.c_str());
 }
 
+// ============================================================
+// 智能安装 Hook (v0.0.2 - PE Architecture Detection)
+// ============================================================
 bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     std::string installPath = GetInstallPath();
     if (installPath.empty()) {
-        std::cerr << "[Installer] 未找到网易云音乐安装路径" << std::endl;
+        std::cerr << "[ERROR] 无法定位网易云音乐安装路径" << std::endl;
+        return false;
+    }
+    
+    std::string targetExe = installPath + "\\cloudmusic.exe";
+    
+    // 检测目标进程架构 (x86 or x64)
+    HANDLE hFile = CreateFileA(targetExe.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        std::cerr << "[ERROR] 无法打开 cloudmusic.exe: " << GetLastError() << std::endl;
+        return false;
+    }
+    
+    // 读取 DOS 头
+    IMAGE_DOS_HEADER dosHeader;
+    DWORD bytesRead;
+    if (!ReadFile(hFile, &dosHeader, sizeof(dosHeader), &bytesRead, NULL) || dosHeader.e_magic != IMAGE_DOS_SIGNATURE) {
+        CloseHandle(hFile);
+        std::cerr << "[ERROR] 无效的 PE 文件 (DOS Header)" << std::endl;
+        return false;
+    }
+    
+    // 跳转到 PE 头
+    SetFilePointer(hFile, dosHeader.e_lfanew, NULL, FILE_BEGIN);
+    
+    // 读取 NT 头 (仅 Signature 和 FileHeader)
+    DWORD peSignature;
+    IMAGE_FILE_HEADER fileHeader;
+    ReadFile(hFile, &peSignature, sizeof(peSignature), &bytesRead, NULL);
+    ReadFile(hFile, &fileHeader, sizeof(fileHeader), &bytesRead, NULL);
+    CloseHandle(hFile);
+    
+    if (peSignature != IMAGE_NT_SIGNATURE) {
+        std::cerr << "[ERROR] 无效的 PE 文件 (NT Signature)" << std::endl;
+        return false;
+    }
+    
+    // 判断架构
+    const char* archSubdir = nullptr;
+    if (fileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
+        archSubdir = "x86";
+    } else if (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
+        archSubdir = "x64";
+    } else {
+        std::cerr << "[ERROR] 不支持的架构: 0x" << std::hex << fileHeader.Machine << std::endl;
+        return false;
+    }
+    
+    // 构建源 DLL 路径 (智能匹配架构)
+    std::string sourceDll;
+    if (srcDllPath.find(archSubdir) != std::string::npos) {
+        // 用户已经指定了架构路径
+        sourceDll = srcDllPath;
+    } else {
+        // 自动补全架构路径 (假设标准布局)
+        sourceDll = std::string("bin/") + archSubdir + "/version.dll";
+        
+        // 回退: 尝试当前目录
+        if (!PathFileExistsA(sourceDll.c_str())) {
+            sourceDll = srcDllPath; // 使用原始路径
+        }
+    }
+    
+    if (!PathFileExistsA(sourceDll.c_str())) {
+        std::cerr << "[ERROR] 找不到源 DLL: " << sourceDll << std::endl;
+        std::cerr << "[HINT] 请确保 version.dll 位于 bin/" << archSubdir << "/ 目录" << std::endl;
         return false;
     }
     
     std::string targetDllPath = installPath + "\\version.dll";
     
-    // 检查源文件是否存在
-    if (!PathFileExistsA(srcDllPath.c_str())) {
-        std::cerr << "[Installer] 源文件不存在: " << srcDllPath << std::endl;
-        return false;
+    // 备份旧文件 (如果存在)
+    if (PathFileExistsA(targetDllPath.c_str())) {
+        std::string backup = targetDllPath + ".bak";
+        MoveFileExA(targetDllPath.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING);
     }
     
-    // 复制文件
-    if (!CopyFileA(srcDllPath.c_str(), targetDllPath.c_str(), FALSE)) {
+    // 复制新文件
+    if (!CopyFileA(sourceDll.c_str(), targetDllPath.c_str(), FALSE)) {
         DWORD err = GetLastError();
-        std::cerr << "[Installer] 安装失败，错误码: " << err << std::endl;
+        std::cerr << "[ERROR] 复制失败: " << err << std::endl;
         if (err == ERROR_ACCESS_DENIED) {
-            std::cerr << "[Installer] 权限不足，请尝试以管理员身份运行" << std::endl;
+            std::cerr << "[HINT] 权限不足，请尝试以管理员身份运行" << std::endl;
         }
         return false;
     }
     
-    std::cout << "[Installer] Hook 已成功安装到: " << targetDllPath << std::endl;
+    std::cout << "[OK] Hook 已安装 (" << archSubdir << "): " << targetDllPath << std::endl;
     return true;
 }
+
 
 bool NeteaseDriver::RestartApplication(const std::string& providedPath) {
     // 获取安装路径（优先使用传入的路径，避免杀掉进程后无法检测）
@@ -419,15 +488,15 @@ void NeteaseDriver::MonitorLoop() {
 // ============================================================
 
 extern "C" {
-    bool Netease_Connect(int port) {
+    bool NETEASE_API Netease_Connect(int port) {
         return NeteaseDriver::Instance().Connect(port);
     }
 
-    void Netease_Disconnect() {
+    void NETEASE_API Netease_Disconnect() {
         NeteaseDriver::Instance().Disconnect();
     }
 
-    bool Netease_GetState(IPC::NeteaseState* outState) {
+    bool NETEASE_API Netease_GetState(IPC::NeteaseState* outState) {
         if (!outState) return false;
         
         // 简单直接调用，因为 GetState 内部已经处理了未连接情况
@@ -441,7 +510,7 @@ extern "C" {
     // 全局静态变量保存 C 回调，用于转接
     static Netease_Callback g_CCallback = nullptr;
 
-    void Netease_SetTrackChangedCallback(Netease_Callback callback) {
+    void NETEASE_API Netease_SetTrackChangedCallback(Netease_Callback callback) {
         g_CCallback = callback;
         if (callback) {
             // 注册 C++ 回调，转接给 C 回调
@@ -460,7 +529,7 @@ extern "C" {
     typedef void (*Netease_LogCallback)(const char* level, const char* msg);
     static Netease_LogCallback g_CLogCallback = nullptr;
 
-    void Netease_SetLogCallback(Netease_LogCallback callback) {
+    void NETEASE_API Netease_SetLogCallback(Netease_LogCallback callback) {
         g_CLogCallback = callback;
         if (callback) {
             NeteaseDriver::Instance().SetLogCallback([](const std::string& level, const std::string& msg) {
@@ -473,7 +542,7 @@ extern "C" {
         }
     }
 
-    int Netease_GetInstallPath(char* buffer, int maxLen) {
+    int NETEASE_API Netease_GetInstallPath(char* buffer, int maxLen) {
         std::string path = NeteaseDriver::GetInstallPath();
         if (buffer && maxLen > 0) {
             strncpy_s(buffer, maxLen, path.c_str(), _TRUNCATE);
@@ -481,16 +550,16 @@ extern "C" {
         return (int)path.length();
     }
 
-    bool Netease_IsHookInstalled() {
+    bool NETEASE_API Netease_IsHookInstalled() {
         return NeteaseDriver::IsHookInstalled();
     }
 
-    bool Netease_InstallHook(const char* dllPath) {
+    bool NETEASE_API Netease_InstallHook(const char* dllPath) {
         std::string path = dllPath ? dllPath : "version.dll";
         return NeteaseDriver::InstallHook(path);
     }
 
-    bool Netease_RestartApplication(const char* installPath) {
+    bool NETEASE_API Netease_RestartApplication(const char* installPath) {
         std::string path = installPath ? installPath : "";
         return NeteaseDriver::RestartApplication(path);
     }

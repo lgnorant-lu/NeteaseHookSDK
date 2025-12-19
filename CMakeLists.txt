@@ -1,4 +1,4 @@
-# 网易云音乐 Hook SDK v0.0.1
+# 网易云音乐 Hook SDK v0.0.2
 # ============================================================
 # 
 # 项目说明：
@@ -13,7 +13,10 @@
 # ============================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(NeteaseHookSDK VERSION 0.0.1 LANGUAGES CXX)
+project(NeteaseHookSDK VERSION 0.0.2 LANGUAGES CXX)
+
+# 支持多架构构建 (x86/x64)
+# 使用 cmake -A x64 或 -A Win32 来指定目标架构
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -21,10 +24,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 生成编译数据库（供 IDE 使用）
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# 输出目录
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# 输出目录 (架构分离)
+# 检测当前编译架构
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(ARCH_SUFFIX "x64")
+elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(ARCH_SUFFIX "x86")
+else()
+    set(ARCH_SUFFIX "unknown")
+endif()
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib/${ARCH_SUFFIX})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/${ARCH_SUFFIX})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/${ARCH_SUFFIX})
 
 # ============================================================
 # 依赖库
@@ -76,11 +88,11 @@ add_subdirectory(examples)    # 示例程序 (C Demo)
 # 安装规则 (Install Rules for Distribution)
 # ============================================================
 
-# 安装二进制文件
+# 安装二进制文件 (按架构分类)
 install(TARGETS NeteaseDriver version
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION bin
-    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin/${ARCH_SUFFIX}
+    LIBRARY DESTINATION bin/${ARCH_SUFFIX}
+    ARCHIVE DESTINATION lib/${ARCH_SUFFIX}
 )
 
 # 安装头文件
