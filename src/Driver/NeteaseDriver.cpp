@@ -202,12 +202,18 @@ std::string NeteaseDriver::GetInstallPath() {
         if (Process32First(hSnapshot, &pe32)) {
             do {
                 if (_stricmp(pe32.szExeFile, "cloudmusic.exe") == 0) {
-                    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pe32.th32ProcessID);
+                    // 使用 PROCESS_QUERY_LIMITED_INFORMATION 权限（更宽松）
+                    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pe32.th32ProcessID);
                     if (hProcess) {
                         char path[MAX_PATH] = {0};
-                        if (GetModuleFileNameExA(hProcess, NULL, path, MAX_PATH)) {
+                        DWORD pathLen = MAX_PATH;
+                        
+                        // 使用 QueryFullProcessImageNameA 替代 GetModuleFileNameExA
+                        // 优点：不需要 PROCESS_VM_READ，更可靠
+                        if (QueryFullProcessImageNameA(hProcess, 0, path, &pathLen)) {
                             CloseHandle(hProcess);
                             CloseHandle(hSnapshot);
+                            
                             // 去掉文件名，只留目录
                             std::string sPath = path;
                             size_t lastSlash = sPath.find_last_of("\\/");
@@ -268,8 +274,35 @@ bool NeteaseDriver::IsHookInstalled() {
     return PathFileExistsA(dllPath.c_str());
 }
 
+// 辅助函数：检查 DLL 架构是否匹配
+static bool IsDllArchMatch(const std::string& dllPath, bool targetIsX64) {
+    HANDLE hFile = CreateFileA(dllPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+
+    IMAGE_DOS_HEADER dosHeader;
+    DWORD bytesRead;
+    bool isMatch = false;
+
+    if (ReadFile(hFile, &dosHeader, sizeof(dosHeader), &bytesRead, NULL) && dosHeader.e_magic == IMAGE_DOS_SIGNATURE) {
+        SetFilePointer(hFile, dosHeader.e_lfanew, NULL, FILE_BEGIN);
+        DWORD peSignature;
+        IMAGE_FILE_HEADER fileHeader;
+        if (ReadFile(hFile, &peSignature, sizeof(peSignature), &bytesRead, NULL) && 
+            ReadFile(hFile, &fileHeader, sizeof(fileHeader), &bytesRead, NULL)) {
+            
+            bool dllIsX64 = (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64);
+            bool dllIsX86 = (fileHeader.Machine == IMAGE_FILE_MACHINE_I386);
+            
+            if (targetIsX64 && dllIsX64) isMatch = true;
+            if (!targetIsX64 && dllIsX86) isMatch = true;
+        }
+    }
+    CloseHandle(hFile);
+    return isMatch;
+}
+
 // ============================================================
-// 智能安装 Hook (v0.0.2 - PE Architecture Detection)
+// 智能安装 Hook (v0.0.3 - Robust Search & Verify)
 // ============================================================
 bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     std::string installPath = GetInstallPath();
@@ -280,90 +313,108 @@ bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     
     std::string targetExe = installPath + "\\cloudmusic.exe";
     
-    // 检测目标进程架构 (x86 or x64)
+    // 1. 检测目标进程架构
     HANDLE hFile = CreateFileA(targetExe.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
-        std::cerr << "[ERROR] 无法打开 cloudmusic.exe: " << GetLastError() << std::endl;
+        std::cerr << "[ERROR] 无法打开 cloudmusic.exe" << std::endl;
         return false;
     }
     
-    // 读取 DOS 头
     IMAGE_DOS_HEADER dosHeader;
     DWORD bytesRead;
-    if (!ReadFile(hFile, &dosHeader, sizeof(dosHeader), &bytesRead, NULL) || dosHeader.e_magic != IMAGE_DOS_SIGNATURE) {
+    
+    // 读取并验证 DOS 头
+    if (!ReadFile(hFile, &dosHeader, sizeof(dosHeader), &bytesRead, NULL) || 
+        dosHeader.e_magic != IMAGE_DOS_SIGNATURE) {
         CloseHandle(hFile);
         std::cerr << "[ERROR] 无效的 PE 文件 (DOS Header)" << std::endl;
         return false;
     }
     
-    // 跳转到 PE 头
+    // 跳转到 PE 头并读取
     SetFilePointer(hFile, dosHeader.e_lfanew, NULL, FILE_BEGIN);
-    
-    // 读取 NT 头 (仅 Signature 和 FileHeader)
-    DWORD peSignature;
+    DWORD peSig;
     IMAGE_FILE_HEADER fileHeader;
-    ReadFile(hFile, &peSignature, sizeof(peSignature), &bytesRead, NULL);
-    ReadFile(hFile, &fileHeader, sizeof(fileHeader), &bytesRead, NULL);
+    
+    if (!ReadFile(hFile, &peSig, sizeof(peSig), &bytesRead, NULL) ||
+        !ReadFile(hFile, &fileHeader, sizeof(fileHeader), &bytesRead, NULL) ||
+        peSig != IMAGE_NT_SIGNATURE) {
+        CloseHandle(hFile);
+        std::cerr << "[ERROR] 无效的 PE 文件 (NT Header)" << std::endl;
+        return false;
+    }
+    
     CloseHandle(hFile);
+
+    bool targetIsX64 = (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64);
+    const char* archName = targetIsX64 ? "x64" : "x86";
     
-    if (peSignature != IMAGE_NT_SIGNATURE) {
-        std::cerr << "[ERROR] 无效的 PE 文件 (NT Signature)" << std::endl;
-        return false;
+    // 2. 构建搜索路径列表
+    std::vector<std::string> candidates;
+    
+    // A. 显式传入的路径
+    if (!srcDllPath.empty()) candidates.push_back(srcDllPath);
+    
+    // B. 标准发布结构: bin/{arch}/version.dll
+    candidates.push_back(std::string("bin/") + archName + "/version.dll");
+    
+    // C. 当前目录: ./version.dll
+    candidates.push_back("version.dll");
+    
+    // D. 模块同级目录 (解决开发环境路径问题)
+    char modulePath[MAX_PATH] = {0};
+    HMODULE hModule = NULL;
+    
+    // 使用 InstallHook 函数本身的地址来获取模块句柄
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, 
+                          (LPCSTR)InstallHook, &hModule) && hModule) {
+        if (GetModuleFileNameA(hModule, modulePath, MAX_PATH) > 0) {
+            std::string modDir = modulePath;
+            size_t lastSlash = modDir.find_last_of("\\/");
+            if (lastSlash != std::string::npos) {
+                modDir = modDir.substr(0, lastSlash);
+                candidates.push_back(modDir + "\\version.dll");
+            }
+        }
     }
-    
-    // 判断架构
-    const char* archSubdir = nullptr;
-    if (fileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
-        archSubdir = "x86";
-    } else if (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
-        archSubdir = "x64";
-    } else {
-        std::cerr << "[ERROR] 不支持的架构: 0x" << std::hex << fileHeader.Machine << std::endl;
-        return false;
-    }
-    
-    // 构建源 DLL 路径 (智能匹配架构)
-    std::string sourceDll;
-    if (srcDllPath.find(archSubdir) != std::string::npos) {
-        // 用户已经指定了架构路径
-        sourceDll = srcDllPath;
-    } else {
-        // 自动补全架构路径 (假设标准布局)
-        sourceDll = std::string("bin/") + archSubdir + "/version.dll";
-        
-        // 回退: 尝试当前目录
-        if (!PathFileExistsA(sourceDll.c_str())) {
-            sourceDll = srcDllPath; // 使用原始路径
+
+    // 3. 遍历搜索并验证架构
+    std::string validSourceDll;
+    for (const auto& path : candidates) {
+        if (PathFileExistsA(path.c_str())) {
+            // 验证架构是否匹配
+            if (IsDllArchMatch(path, targetIsX64)) {
+                validSourceDll = path;
+                break; // 找到完美匹配
+            }
         }
     }
     
-    if (!PathFileExistsA(sourceDll.c_str())) {
-        std::cerr << "[ERROR] 找不到源 DLL: " << sourceDll << std::endl;
-        std::cerr << "[HINT] 请确保 version.dll 位于 bin/" << archSubdir << "/ 目录" << std::endl;
+    if (validSourceDll.empty()) {
+        std::cerr << "[ERROR] 未找到架构为 " << archName << " 的 version.dll" << std::endl;
+        std::cerr << "[INFO] 已尝试路径: " << std::endl;
+        for (const auto& p : candidates) std::cerr << "  - " << p << std::endl;
         return false;
     }
     
+    // 4. 执行安装
     std::string targetDllPath = installPath + "\\version.dll";
     
-    // 备份旧文件 (如果存在)
     if (PathFileExistsA(targetDllPath.c_str())) {
-        std::string backup = targetDllPath + ".bak";
-        MoveFileExA(targetDllPath.c_str(), backup.c_str(), MOVEFILE_REPLACE_EXISTING);
+        MoveFileExA(targetDllPath.c_str(), (targetDllPath + ".bak").c_str(), MOVEFILE_REPLACE_EXISTING);
     }
     
-    // 复制新文件
-    if (!CopyFileA(sourceDll.c_str(), targetDllPath.c_str(), FALSE)) {
-        DWORD err = GetLastError();
-        std::cerr << "[ERROR] 复制失败: " << err << std::endl;
-        if (err == ERROR_ACCESS_DENIED) {
-            std::cerr << "[HINT] 权限不足，请尝试以管理员身份运行" << std::endl;
-        }
+    if (!CopyFileA(validSourceDll.c_str(), targetDllPath.c_str(), FALSE)) {
+        std::cerr << "[ERROR] 安装失败 代码: " << GetLastError() << std::endl;
         return false;
     }
     
-    std::cout << "[OK] Hook 已安装 (" << archSubdir << "): " << targetDllPath << std::endl;
+    std::cout << "[OK] Hook 已安装 (" << archName << "): " << targetDllPath << std::endl;
+    std::cout << "     源文件: " << validSourceDll << std::endl;
     return true;
 }
+
+
 
 
 bool NeteaseDriver::RestartApplication(const std::string& providedPath) {

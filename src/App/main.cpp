@@ -131,19 +131,16 @@ int main() {
         
         // Ctrl + I: 安装 Hook
         if (isCtrlDown && IsKeyPressed(KEY_I) && !isRestarting) {
-            std::string dllPath = "build/bin/version.dll";
-            if (!FileExists(dllPath.c_str())) dllPath = "version.dll";
-            
-            if (FileExists(dllPath.c_str())) {
-                if (NeteaseDriver::InstallHook(dllPath)) {
-                    hookInstalled = true;
-                    // 安装后自动重启
-                    NeteaseDriver::RestartApplication(installPath);
-                    isRestarting = true;
-                    restartStartTime = currentTime;
-                    connected = false;
-                    driver.Disconnect();
-                }
+            // 直接调用 InstallHook，让它使用内置的智能搜索逻辑
+            // 它会自动搜索：bin/x86, bin/x64, 当前目录, 模块目录
+            if (NeteaseDriver::InstallHook("")) {
+                hookInstalled = true;
+                // 安装后自动重启
+                NeteaseDriver::RestartApplication(installPath);
+                isRestarting = true;
+                restartStartTime = currentTime;
+                connected = false;
+                driver.Disconnect();
             }
         }
         
