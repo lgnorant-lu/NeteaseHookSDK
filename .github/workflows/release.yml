@@ -62,8 +62,9 @@ jobs:
     - name: Merge Architectures
       run: |
         New-Item -ItemType Directory -Force -Path merged
-        Copy-Item -Recurse -Path dist/bins-x86/* -Destination merged/
-        Copy-Item -Recurse -Path dist/bins-x64/* -Destination merged/
+        # 使用 -Force 强制合并文件夹，解决 "already exists" 错误
+        Copy-Item -Recurse -Force -Path dist/bins-x86/* -Destination merged/
+        Copy-Item -Recurse -Force -Path dist/bins-x64/* -Destination merged/
     
     - name: Package Release
       run: |
