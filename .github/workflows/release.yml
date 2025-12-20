@@ -78,24 +78,32 @@ jobs:
           NeteaseHookSDK-${{ github.ref_name }}-windows-multiarch.zip
         generate_release_notes: true  # 自动生成变更日志 (基于 PR/Commit)
         body: |
-          ## NeteaseHookSDK ${{ github.ref_name }}
+          ## 🚀 NeteaseHookSDK ${{ github.ref_name }} (Integration Beta)
           
-          详细文档与集成说明请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。
+          本项目是针对网易云音乐 (Netease Cloud Music) 桌面客户端的进程度监控与数据捕获解决方案。v0.1.0 标志着从单纯的 CDP 监听演进为 **"状态监听 + 数据补全"** 的混合架构。
           
-          ### 📦 下载说明
-          本版本同时包含 **x86** 和 **x64** 架构。SDK 会自动检测目标网易云音乐的架构并部署匹配的 DLL。
+          ### � 逆向与核心突破 (RE Highlights)
+          - **非侵入式驻留**: 利用 Windows PE 加载特性实现 `version.dll` 劫持，完美避开 V8 引擎底层指针压缩导致的内存扫描失效。
+          - **CDP 桥接技术**: 动态注入 JS Payload 至渲染层，实时捕获 `audioplayer.onPlayProgress` 事件，实现毫秒级同步。
+          - **PE 架构自适应**: 驱动层支持 x86/x64 双架构自适应探测，确保在不同环境下的稳定性。
           
-          ### ✨ v0.1.0 重要特性
-          - **核心驱动**: 基于 CDP 的非侵入式状态监听，解决 V8 堆随机化与指针压缩问题。
-          - **WebAPI 增强**: 支持歌曲元数据获取、专辑封面下载 (stb_image) 以及 歌词同步 (WinINet)。
-          - **音频捕捉**: 集成 WASAPI Loopback (miniaudio) 与 FFT 可视化。
-          - **智能缓存**: 支持 Cache-Aside 歌词缓存策略。
-          - **Demo App**: 基于 Raylib 开发的沉浸式黑胶唱机监控程序。
+          ### ✨ WebAPI & 增强功能
+          - **智能歌词系统**: 实现 Cache-Aside 缓存策略，兼容官方加密格式，支持 LRC/翻译/罗马音同步。
+          - **媒体信息提取**: 基于 `WinINet` 实现轻量级元数据获取与专辑封面下载（由 `stb_image` 驱动）。
+          - **音频风暴可视化**: 集成 WASAPI 环形捕捉，实时 FFT 频谱分析。
           
-          ### 🛠 构建与修复
-          - 解决了 `NeteaseDriver::Instance()` LNK2019 符号未定义问题。
-          - 修复了 AudioCapture 模块在 x64 环境下的回调作用域冲突。
-          - 归档了全量设计原案至 `Archived/` 目录。
+          ### 🎨 Demo 应用更新 (NeteaseMonitor)
+          - **沉浸式黑胶渲染**: 经过微调的 **1.2 RPM** 极慢旋转感，完美还原网易云沉浸式播放体验。
+          - **可视化进阶**: 引入流体丝线与粒子系统，支持极光背景与玻璃拟态 Shader 渲染。
+          - **物理动效**: 增加唱针（Tonearm）平滑升降物理模拟。
+          
+          ### 🛠 构建修复与审计
+          - 修复 `NeteaseDriver::Instance()` 符号丢失导致的 LNK2019 链接错误。
+          - 解决了 x64 环境下 `AudioCapture` 回调函数的生命周期管理冲突。
+          - 归档了 v0.1.0 的全量设计原案至 `Archived/` 目录。
+          
+          ---
+          详细文档请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。
         draft: false
         prerelease: false
       env:
