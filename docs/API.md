@@ -91,3 +91,82 @@ bool Netease_RestartApplication(const char* installPath);
 ```
 强制重启网易云音乐进程以应用 Hook。
 *   **installPath**: 指定安装路径（若为 NULL 则自动获取）。
+
+## 5. C++ 工具模块 (Netease::API)
+
+自 v0.1.0 起，SDK 提供了 `Netease::API` 静态类，封装了网易云音乐 WebAPI，用于直接获取歌词和元数据。此功能不依赖 Hook，而是直接进行 HTTP 请求。
+
+**头文件**: `#include <NeteaseAPI.h>`  
+**命名空间**: `Netease`
+
+### 5.1 数据结构
+
+```cpp
+struct SongMetadata {
+    long long songId;           // 歌曲 ID
+    std::string title;          // 歌曲标题
+    std::vector<std::string> artists;  // 艺术家列表
+    std::string album;          // 专辑名称
+    std::string albumPicUrl;    // 专辑封面 URL
+    long long duration;         // 时长（毫秒）
+};
+
+struct LyricData {
+    std::string lrc;            // 原版歌词
+    std::string tlyric;         // 翻译歌词
+    std::string romalrc;        // 罗马音
+    bool fromCache;             // 是否来自本地缓存
+    
+    // 合并 LRC 与 翻译 (例如: "Hello / 你好")
+    std::string GetMergedLyric() const;
+};
+```
+
+### 5.2 核心方法
+
+#### `API::GetLyric`
+```cpp
+static std::optional<LyricData> GetLyric(long long songId, bool useCache = true, const std::string& cookie = "");
+```
+智能获取歌词。采用 **Cache-Aside** 策略：
+1.  优先查询本地缓存（涵盖网易云官方目录和 SDK 目录）。
+2.  缓存未命中或 `useCache=false` 时，发起在线请求。
+3.  请求成功后自动回写缓存。
+
+#### `API::GetSongDetail`
+```cpp
+static std::optional<SongMetadata> GetSongDetail(long long songId);
+```
+通过 SongID 查询歌曲详情（标题、封面、专辑等）。不需要 Cookie。
+
+#### `API::GetLocalLyric`
+```cpp
+static std::optional<LyricData> GetLocalLyric(long long songId);
+```
+仅查询本地缓存。自动处理 JSON 转义和格式解析。
+
+#### `API::FetchLyricOnline`
+```cpp
+static std::optional<LyricData> FetchLyricOnline(long long songId, const std::string& cookie = "", bool autoCache = true);
+```
+强制在线获取。`autoCache=true` 时会自动更新本地缓存。
+
+### 5.3 缓存管理
+
+#### `API::CacheLyric`
+```cpp
+static bool CacheLyric(long long songId, const LyricData& data);
+```
+手动写入缓存。
+
+#### `API::ClearLyricCache`
+```cpp
+static bool ClearLyricCache(long long songId);
+```
+清除指定歌曲的 SDK 缓存。
+
+#### `API::ClearAllCache`
+```cpp
+static int ClearAllCache();
+```
+清除 SDK 生成的所有歌词缓存文件。

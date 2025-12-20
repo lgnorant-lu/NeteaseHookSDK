@@ -30,11 +30,21 @@ std::wstring g_NewCmdLine;
 typedef LPWSTR(WINAPI* GetCommandLineW_t)();
 GetCommandLineW_t fpGetCommandLineW = NULL;
 
+#include <ctime>
+#include <iomanip>
+#include <sstream>
+
 // 简单的文件日志
 void Log(const std::wstring& msg) {
     FILE* fp = _wfopen(L"ncm_hook.log", L"a+");
     if (fp) {
-        fwprintf(fp, L"%s\n", msg.c_str());
+        time_t now = time(nullptr);
+        tm tstruct;
+        localtime_s(&tstruct, &now);
+        wchar_t timeBuf[20];
+        wcsftime(timeBuf, sizeof(timeBuf)/sizeof(wchar_t), L"%H:%M:%S", &tstruct);
+        
+        fwprintf(fp, L"[%s][Proxy] %s\n", timeBuf, msg.c_str());
         fclose(fp);
     }
 }

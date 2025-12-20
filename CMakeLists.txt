@@ -1,4 +1,4 @@
-# 网易云音乐 Hook SDK v0.0.2
+# 网易云音乐 Hook SDK v0.1.0
 # ============================================================
 # 
 # 项目说明：
@@ -13,16 +13,26 @@
 # ============================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(NeteaseHookSDK VERSION 0.0.2 LANGUAGES CXX)
+project(NeteaseHookSDK VERSION 0.1.0 LANGUAGES CXX)
 
 # 支持多架构构建 (x86/x64)
 # 使用 cmake -A x64 或 -A Win32 来指定目标架构
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 生成编译数据库（供 IDE 使用）
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# MSVC 特定配置
+if(MSVC)
+    # /FS 解决 C1041 错误 (多个 CL.EXE 写入同一个 .PDB)
+    add_compile_options(/FS)
+endif()
+
+# 可选模块开关 (默认关闭测试以加快构建并避免 PDB 冲突)
+option(BUILD_TESTING "构建单元测试" OFF)
+option(BUILD_EXAMPLES "构建示例程序" OFF)
 
 # 输出目录 (架构分离)
 # 检测当前编译架构
@@ -81,8 +91,14 @@ FetchContent_MakeAvailable(googletest)
 add_subdirectory(src/Agent)   # 启动参数注入 DLL (version.dll)
 add_subdirectory(src/Driver)  # NeteaseDriver 静态库
 add_subdirectory(src/App)     # 测试程序
-add_subdirectory(src/Tests)   # 单元测试
-add_subdirectory(examples)    # 示例程序 (C Demo)
+if(BUILD_TESTING)
+    add_subdirectory(src/Tests)   # 单元测试
+    add_subdirectory(tests)       # NeteaseAPI 测试
+endif()
+
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)    # 示例程序 (C Demo)
+endif()
 
 # ============================================================
 # 安装规则 (Install Rules for Distribution)

@@ -13,6 +13,7 @@
 add_library(NeteaseDriver SHARED
     NeteaseDriver.cpp
     CDPController.cpp
+    ${CMAKE_SOURCE_DIR}/src/Utils/NeteaseAPI.cpp  # 网易云 API 工具
     ${CMAKE_SOURCE_DIR}/extern/easywsclient.cpp  # WebSocket 独立编译
 )
 
@@ -24,17 +25,25 @@ target_include_directories(NeteaseDriver PUBLIC
     include
     ${CMAKE_SOURCE_DIR}/extern      # httplib, easywsclient
     ${CMAKE_SOURCE_DIR}/src/Shared  # SharedData.hpp
+    ${CMAKE_SOURCE_DIR}/src/Utils   # NeteaseAPI.h
 )
 
 # Windows 网络库
 target_link_libraries(NeteaseDriver PRIVATE 
     kernel32 
     user32 
-    ws2_32  # Winsock
+    ws2_32      # Winsock
+    wininet     # WinINet (HTTP 请求)
+    shlwapi     # 路径工具
 )
 
 # C++17（用于 std::regex）
 target_compile_features(NeteaseDriver PRIVATE cxx_std_17)
+
+# MSVC 特定编译选项
+if(MSVC)
+    target_compile_options(NeteaseDriver PRIVATE /FS)  # 支持并行编译
+endif()
 
 # 禁用异常（可选优化）
 target_compile_definitions(NeteaseDriver PRIVATE 
@@ -51,5 +60,9 @@ install(TARGETS NeteaseDriver
 )
 
 install(DIRECTORY include/
+    DESTINATION include
+)
+
+install(FILES ${CMAKE_SOURCE_DIR}/src/Utils/NeteaseAPI.h
     DESTINATION include
 )

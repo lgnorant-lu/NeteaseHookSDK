@@ -1,6 +1,6 @@
-# NeteaseHookSDK (v0.0.2)
+# NeteaseHookSDK (v0.1.0)
 
-**[状态: ACTIVE]** **[架构: Hybrid/CDP]** **[平台: Windows x86/x64]**
+**[状态: BETA]** **[架构: Hybrid (CDP + WebAPI)]** **[平台: Windows x86/x64]**
  
 ![NeteaseHookSDK Demo](demo.png)
 
@@ -9,9 +9,9 @@
 
 NeteaseHookSDK 是针对网易云音乐 (Netease Cloud Music) 桌面客户端的进程度监控与状态捕获解决方案。本项目旨在解决传统内存扫描 (Memory Scanning) 方案在对抗应用频繁更新、V8 引擎指针压缩 (Pointer Compression) 及堆布局随机化 (Heap Randomization) 时的脆弱性问题。
 
-通过利用 Electron 框架内置的 Chrome DevTools Protocol (CDP) 调试接口，本项目构建了一个非侵入式的 IPC 桥接层，实现了对目标进程内部 `window.channel` 通信总线的实时监听。
+通过利用 Electron 框架内置的 Chrome DevTools Protocol (CDP) 调试接口，本项目构建了一个非侵入式的 IPC 桥接层，同时结合轻量级 WebAPI 客户端，实现了**“状态监听 + 数据补全”**的双模工作流。
 
-**版本**: 0.0.2 (Multi-Arch Beta)
+**版本**: 0.1.0 (Integration Beta)
 
 ## 2. 技术规格
 
@@ -20,6 +20,7 @@ NeteaseHookSDK 是针对网易云音乐 (Netease Cloud Music) 桌面客户端的
 | **Agent** | `version.dll` (Proxy DLL)。劫持进程启动参数，注入 `--remote-debugging-port=9222`。 |
 | **Driver** | C++ 静态链接库。封装 HTTP/WebSocket 协议，管理 CDP 会话生命周期。 |
 | **Bridge** | 注入式 JavaScript Payload。利用 `Runtime.evaluate` 挂钩渲染进程 IPC。 |
+| **Utils** | C++ 工具模块 (`Netease::API`)。提供歌词获取 (Cache-Aside)、元数据查询与缓存管理。 |
 | **Interface** | 标准 C ABI (`extern "C"`). 支持多语言绑定 (FFI)。 |
 
 ## 3. 核心机制
@@ -33,13 +34,26 @@ SDK 驱动层通过 WebSocket 连接至渲染进程，动态注入代码注册 `
 
 ### 3.3 状态提取策略 (State Extraction)
 *   **进度**: 直接监听 `onPlayProgress` 事件。
-*   **总时长**: 由于 IPC 事件不包含总时长，采用 DOM/React Fiber 混合探测技术，从 UI 组件 (`input[type="range"]`) 中逆向提取 `max` 属性。
+*   **总时长**: 采用 DOM/React Fiber 混合探测技术 (`input[type="range"]` / `fiber.memoizedProps`)。
+*   **元数据**: 调用 `Netease::API` 模块，通过 SongID 从官方 API 获取详细信息（封面、专辑、艺术家）。
+
+### 3.4 智能歌词系统 (Smart Lyric System)
+*   **Cache-Aside**: 优先读取本地缓存（兼容网易云官方加密/非加密格式）。
+*   **Auto-Fallback**: 缓存未命中时自动从 API 获取，并以官方兼容格式回写本地。
+*   **Robust Parsers**: 手写状态机 JSON 解析器，完美处理转义字符与异常响应。
+
+### 3.5 标准化日志系统 (Standardized Logging)
+*   **统一格式**: `[时间][级别][模块] 消息`.
+*   **多模块解耦**: 为 API, Driver, Audio 捕获等模块设置独立 Tag, 支持定向审计.
+*   **可重定向**: 支持注册回调函数接管所有 SDK 内部日志, 方便集成到各类监控系统.
+*   **线程安全**: 统一受锁保护的控制台输出, 防止多线程日志交错.
 
 ## 4. 构建与部署
 
 ### 4.1 编译环境
 *   CMake >= 3.20
-*   MSVC v142+ (Visual Studio 2019/2022)
+*   MSVC v142+ (Visual Studio 2022)
+*   GoogleTest (通过 CMake FetchContent 自动下载)
 
 ### 4.2 编译命令
 ```powershell
@@ -128,7 +142,7 @@ bool Netease_InstallHook(const char* dllPath);
 从 GitHub Release 下载的压缩包 (`.zip`) 解压后包含以下目录：
  
 ```text
-NeteaseHookSDK-v0.0.2/
+NeteaseHookSDK-v0.1.0/
 ├── bin/
 │   ├── x86/              # [32位]
 │   │   ├── NeteaseDriver.dll
@@ -137,7 +151,10 @@ NeteaseHookSDK-v0.0.2/
 │       ├── NeteaseDriver.dll
 │       └── version.dll
 ├── include/              # [开发] 头文件
-│   └── NeteaseDriver.h   # C/C++ 引用此头文件
+│   ├── NeteaseDriver.h   # CDP 驱动核心接口
+│   ├── NeteaseAPI.h      # WebAPI 工具接口 (v0.1.0)
+│   ├── SharedData.hpp    # 跨模块状态结构定义
+│   └── SimpleLog.h       # 标准化日志系统 (v0.1.0)
 ├── lib/                  # [开发] 静态导入库
 │   └── NeteaseDriver.lib # 链接时使用 (仅 MSVC)
 ├── examples/             # [示例]
@@ -156,7 +173,10 @@ NeteaseHookSDK-v0.0.2/
  
 *   `src/Agent`: DLL 代理与 Hook 实现 (MinHook)
 *   `src/Driver`: CDP 协议驱动与状态机 (C++)
+*   `src/Utils`: WebAPI 客户端与缓存管理 (`Netease::API`)
 *   `src/Shared`: 跨模块共享数据定义
+*   `src/App`: Raylib 可视化 Demo (展示 SDK 功能)
+*   `tests`: GoogleTest 单元测试套件
 *   `examples`: 跨语言调用范例
  
 ## 10. 法律免责

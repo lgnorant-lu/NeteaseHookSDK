@@ -1,11 +1,13 @@
 /**
  * NeteaseDriver.cpp - 网易云音乐播放状态监控 SDK 实现
  * 
- * 网易云音乐 Hook SDK v0.0.2
+ * 网易云音乐 Hook SDK v0.1.0
  */
 
+#define LOG_TAG "DRIVER"
 #include "NeteaseDriver.h"
 #include "CDPController.h"
+#include "SimpleLog.h"
 #include <iostream>
 #include <cstring>
 #include <windows.h>
@@ -18,18 +20,13 @@
 // 构造/析构
 // ============================================================
 
-NeteaseDriver& NeteaseDriver::Instance() {
-    static NeteaseDriver instance;
-    return instance;
-}
-
-NeteaseDriver::NeteaseDriver()
+NeteaseDriver::NeteaseDriver() 
     : m_CDP(nullptr)
     , m_ListenerRegistered(false)
+    , m_Monitoring(false)
     , m_LastTime(0)
     , m_LastDuration(0)
-    , m_LastUpdateTimestamp(0)
-    , m_Monitoring(false)
+    , m_LastUpdateTimestamp(0) 
 {
 }
 
@@ -37,9 +34,10 @@ NeteaseDriver::~NeteaseDriver() {
     Disconnect();
 }
 
-// ============================================================
-// 连接/断开
-// ============================================================
+NeteaseDriver& NeteaseDriver::Instance() {
+    static NeteaseDriver instance;
+    return instance;
+}
 
 // ============================================================
 // 日志系统
@@ -47,15 +45,21 @@ NeteaseDriver::~NeteaseDriver() {
 
 void NeteaseDriver::Log(const std::string& level, const std::string& msg) const {
     std::lock_guard<std::mutex> lock(m_LogMutex);
+    
+    // 始终发送到回调（如果存在）
     if (m_LogCallback) {
         m_LogCallback(level, msg);
+    } 
+    
+    // 同时也使用标准日志宏输出到控制台
+    if (level == "ERROR") {
+        LOG_ERROR(msg);
+    } else if (level == "WARN") {
+        LOG_WARN(msg);
+    } else if (level == "DEBUG") {
+        LOG_DEBUG(msg);
     } else {
-        std::string fullMsg = "[" + level + "] " + msg;
-        if (level == "ERROR" || level == "WARN") {
-            std::cerr << fullMsg << std::endl;
-        } else {
-            std::cout << fullMsg << std::endl;
-        }
+        LOG_INFO(msg);
     }
 }
 
@@ -218,7 +222,7 @@ std::string NeteaseDriver::GetInstallPath() {
                             std::string sPath = path;
                             size_t lastSlash = sPath.find_last_of("\\/");
                             if (lastSlash != std::string::npos) {
-                                std::cout << "[Installer] 从进程定位: " << sPath.substr(0, lastSlash) << std::endl;
+                                LOG_INFO("[Installer] 从进程定位: " << sPath.substr(0, lastSlash));
                                 return sPath.substr(0, lastSlash);
                             }
                         }
@@ -254,7 +258,7 @@ std::string NeteaseDriver::GetInstallPath() {
                 if (!sPath.empty() && sPath.back() == '\\') sPath.pop_back();
                 
                 if (!sPath.empty()) {
-                    std::cout << "[Installer] 从注册表定位: " << sPath << std::endl;
+                    LOG_INFO("[Installer] 从注册表定位: " << sPath);
                     return sPath;
                 }
             }
@@ -262,7 +266,7 @@ std::string NeteaseDriver::GetInstallPath() {
         }
     }
     
-    std::cerr << "[Installer] 警告: 无法自动定位网易云音乐" << std::endl;
+    LOG_WARN("[Installer] 警告: 无法自动定位网易云音乐");
     return "";
 }
 
@@ -307,7 +311,7 @@ static bool IsDllArchMatch(const std::string& dllPath, bool targetIsX64) {
 bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     std::string installPath = GetInstallPath();
     if (installPath.empty()) {
-        std::cerr << "[ERROR] 无法定位网易云音乐安装路径" << std::endl;
+        LOG_ERROR("无法定位网易云音乐安装路径");
         return false;
     }
     
@@ -316,7 +320,7 @@ bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     // 1. 检测目标进程架构
     HANDLE hFile = CreateFileA(targetExe.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
-        std::cerr << "[ERROR] 无法打开 cloudmusic.exe" << std::endl;
+        LOG_ERROR("无法打开 cloudmusic.exe");
         return false;
     }
     
@@ -327,7 +331,7 @@ bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     if (!ReadFile(hFile, &dosHeader, sizeof(dosHeader), &bytesRead, NULL) || 
         dosHeader.e_magic != IMAGE_DOS_SIGNATURE) {
         CloseHandle(hFile);
-        std::cerr << "[ERROR] 无效的 PE 文件 (DOS Header)" << std::endl;
+        LOG_ERROR("无效的 PE 文件 (DOS Header)");
         return false;
     }
     
@@ -340,7 +344,7 @@ bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
         !ReadFile(hFile, &fileHeader, sizeof(fileHeader), &bytesRead, NULL) ||
         peSig != IMAGE_NT_SIGNATURE) {
         CloseHandle(hFile);
-        std::cerr << "[ERROR] 无效的 PE 文件 (NT Header)" << std::endl;
+        LOG_ERROR("无效的 PE 文件 (NT Header)");
         return false;
     }
     
@@ -391,9 +395,9 @@ bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     }
     
     if (validSourceDll.empty()) {
-        std::cerr << "[ERROR] 未找到架构为 " << archName << " 的 version.dll" << std::endl;
-        std::cerr << "[INFO] 已尝试路径: " << std::endl;
-        for (const auto& p : candidates) std::cerr << "  - " << p << std::endl;
+        LOG_ERROR("未找到架构为 " << archName << " 的 version.dll");
+        LOG_INFO("已尝试路径: ");
+        for (const auto& p : candidates) LOG_INFO("  - " << p);
         return false;
     }
     
@@ -405,12 +409,12 @@ bool NeteaseDriver::InstallHook(const std::string& srcDllPath) {
     }
     
     if (!CopyFileA(validSourceDll.c_str(), targetDllPath.c_str(), FALSE)) {
-        std::cerr << "[ERROR] 安装失败 代码: " << GetLastError() << std::endl;
+        LOG_ERROR("安装失败 代码: " << GetLastError());
         return false;
     }
     
-    std::cout << "[OK] Hook 已安装 (" << archName << "): " << targetDllPath << std::endl;
-    std::cout << "     源文件: " << validSourceDll << std::endl;
+    LOG_INFO("[OK] Hook 已安装 (" << archName << "): " << targetDllPath);
+    LOG_INFO("     源文件: " << validSourceDll);
     return true;
 }
 
@@ -421,7 +425,7 @@ bool NeteaseDriver::RestartApplication(const std::string& providedPath) {
     // 获取安装路径（优先使用传入的路径，避免杀掉进程后无法检测）
     std::string installPath = providedPath.empty() ? GetInstallPath() : providedPath;
     if (installPath.empty()) {
-        std::cerr << "[Installer] 无法获取安装路径，重启失败" << std::endl;
+        LOG_ERROR("[Installer] 无法获取安装路径，重启失败");
         return false;
     }
     
@@ -437,7 +441,7 @@ bool NeteaseDriver::RestartApplication(const std::string& providedPath) {
                     if (hProcess) {
                         TerminateProcess(hProcess, 0);
                         CloseHandle(hProcess);
-                        std::cout << "[Installer] 已终止进程 PID=" << pe32.th32ProcessID << std::endl;
+                        LOG_INFO("[Installer] 已终止进程 PID=" << pe32.th32ProcessID);
                     }
                 }
             } while (Process32Next(hSnapshot, &pe32));
@@ -458,11 +462,11 @@ bool NeteaseDriver::RestartApplication(const std::string& providedPath) {
     if (CreateProcessA(exePath.c_str(), NULL, NULL, NULL, FALSE, 0, NULL, installPath.c_str(), &si, &pi)) {
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
-        std::cout << "[Installer] 已重启网易云音乐" << std::endl;
+        LOG_INFO("[Installer] 已重启网易云音乐");
         return true;
     }
     
-    std::cerr << "[Installer] 重启失败，错误码: " << GetLastError() << std::endl;
+    LOG_ERROR("[Installer] 重启失败，错误码: " << GetLastError());
     return false;
 }
 

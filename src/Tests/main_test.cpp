@@ -1,5 +1,7 @@
+#define LOG_TAG "TEST"
 #include <gtest/gtest.h>
 #include "NeteaseDriver.h"
+#include "SimpleLog.h"
 #include <iostream>
 #include <fstream>
 #include <windows.h>
@@ -27,7 +29,7 @@ void CreateMockPE(const std::string& path, bool isX64) {
 }
 
 // ============================================================
-// PE 架构检测测试 (v0.0.2 新增)
+// PE 架构检测测试 (v0.1.0 新增)
 // ============================================================
 
 TEST(PEDetectionTest, DetectX64Architecture) {
@@ -123,7 +125,7 @@ TEST(SharedMemoryTest, StructureSizeCheck) {
     // float (4) + bool (1) + padding (3) + char[336] = 344
     // 实际上可能有对齐差异，打印出来看
     size_t size = sizeof(IPC::NeteaseState);
-    std::cout << "[INFO] IPC::NeteaseState size: " << size << std::endl;
+    LOG_INFO("IPC::NeteaseState size: " << size);
     // 只要大于 0 且也是 4 的倍数通常可以
     EXPECT_GT(size, 0);
 }
@@ -143,9 +145,9 @@ TEST(NeteaseDriverTest, Connect_FailWhenClosed) {
 TEST(NeteaseDriverTest, GetInstallPath_RealEnv) {
     std::string path = NeteaseDriver::GetInstallPath();
     if (path.empty()) {
-        std::cout << "[WARN] Netease Cloud Music not found, skipping path check." << std::endl;
+        LOG_WARN("Netease Cloud Music not found, skipping path check.");
     } else {
-        std::cout << "[INFO] Found install path: " << path << std::endl;
+        LOG_INFO("Found install path: " << path);
         EXPECT_FALSE(path.empty());
     }
 }

@@ -3,7 +3,7 @@ name: Release Build
 on:
   push:
     tags:
-      - 'v*.*.*'  # 触发条件: 推送 v0.0.2 等版本 tag
+      - 'v*.*.*'  # 触发条件: 推送 v0.1.0 等版本 tag
   workflow_dispatch:  # 允许手动触发
 
 permissions:
@@ -80,15 +80,22 @@ jobs:
         body: |
           ## NeteaseHookSDK ${{ github.ref_name }}
           
-          详细文档与安装指南请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。
+          详细文档与集成说明请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。
           
           ### 📦 下载说明
           本版本同时包含 **x86** 和 **x64** 架构。SDK 会自动检测目标网易云音乐的架构并部署匹配的 DLL。
           
-          ### ✨ v0.0.2 更新
-          - ✅ 支持 32 位 (x86) 应用程序
-          - ✅ 智能架构检测 (PE Header 分析)
-          - ✅ 标准化调用约定 (`__cdecl`)
+          ### ✨ v0.1.0 重要特性
+          - **核心驱动**: 基于 CDP 的非侵入式状态监听，解决 V8 堆随机化与指针压缩问题。
+          - **WebAPI 增强**: 支持歌曲元数据获取、专辑封面下载 (stb_image) 以及 歌词同步 (WinINet)。
+          - **音频捕捉**: 集成 WASAPI Loopback (miniaudio) 与 FFT 可视化。
+          - **智能缓存**: 支持 Cache-Aside 歌词缓存策略。
+          - **Demo App**: 基于 Raylib 开发的沉浸式黑胶唱机监控程序。
+          
+          ### 🛠 构建与修复
+          - 解决了 `NeteaseDriver::Instance()` LNK2019 符号未定义问题。
+          - 修复了 AudioCapture 模块在 x64 环境下的回调作用域冲突。
+          - 归档了全量设计原案至 `Archived/` 目录。
         draft: false
         prerelease: false
       env:

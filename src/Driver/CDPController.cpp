@@ -8,7 +8,9 @@
  * - easywsclient (WebSocket 客户端)
  */
 
+#define LOG_TAG "CDP"
 #include "CDPController.h"
+#include "SimpleLog.h"
 
 // Windows 网络库
 #ifdef _WIN32
@@ -154,7 +156,7 @@ std::string CDPController::GetKernelPageWSUrl() {
     
     auto res = client.Get("/json");
     if (!res || res->status != 200) {
-        std::cerr << "[CDP] 错误: 无法访问 /json 端点 (端口 " << m_Port << ")" << std::endl;
+        LOG_ERROR("无法访问 /json 端点 (端口 " << m_Port << ")");
         return "";
     }
     
@@ -167,7 +169,7 @@ std::string CDPController::GetKernelPageWSUrl() {
     }
     
     if (orpheusPos == std::string::npos) {
-        std::cerr << "[CDP] 错误: 未找到 orpheus:// 内核页面" << std::endl;
+        LOG_ERROR("未找到 orpheus:// 内核页面");
         return "";
     }
     
@@ -206,18 +208,18 @@ bool CDPController::Connect() {
         return false;
     }
     
-    std::cout << "[CDP] 连接到: " << wsUrl << std::endl;
+    LOG_INFO("连接到: " << wsUrl);
     
     using easywsclient::WebSocket;
     m_WebSocket = WebSocket::from_url(wsUrl);
     
     if (!m_WebSocket) {
-        std::cerr << "[CDP] 错误: WebSocket 连接失败" << std::endl;
+        LOG_ERROR("WebSocket 连接失败");
         return false;
     }
     
     m_Connected = true;
-    std::cout << "[CDP] 连接成功!" << std::endl;
+    LOG_INFO("连接成功!");
     return true;
 }
 
@@ -315,11 +317,11 @@ bool CDPController::RegisterProgressListener() {
     // 检查是否成功
     if (result.find("\"success\":true") != std::string::npos ||
         result.find("\"success\": true") != std::string::npos) {
-        std::cout << "[CDP] 播放进度监听已注册!" << std::endl;
+        LOG_INFO("播放进度监听已注册!");
         return true;
     }
     
-    std::cerr << "[CDP] 注册失败: " << result << std::endl;
+    LOG_ERROR("注册失败: " << result);
     return false;
 }
 
