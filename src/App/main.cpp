@@ -195,23 +195,34 @@ struct DiscRotation {
      */
     void Update(bool isPlaying, float deltaTime) {
         float targetVelocity = isPlaying ? TARGET_OMEGA : 0.0f;
-        float accel = isPlaying ? ACCEL : DECEL;
-        
-        // 平滑插值到目标速度
         float speedDiff = targetVelocity - angularVelocity;
-        if (fabs(speedDiff) < accel * deltaTime) {
-            angularVelocity = targetVelocity;
+        
+        if (isPlaying) {
+            // 加速阶段：线性平滑加速
+            if (fabs(speedDiff) < ACCEL * deltaTime) {
+                angularVelocity = targetVelocity;
+            } else {
+                angularVelocity += ((speedDiff > 0.0f) ? 1.0f : -1.0f) * ACCEL * deltaTime;
+            }
         } else {
-            float dir = (speedDiff > 0.0f) ? 1.0f : -1.0f;
-            angularVelocity += dir * accel * deltaTime;
+            // 停止阶段：模拟“磁吸摩擦” (Magnetic Brake)
+            // 速度越高阻力越小，速度越低阻力越大，产生一种“粘滞”的停转感
+            float magneticFactor = 1.0f + (1.0f - (angularVelocity / TARGET_OMEGA)) * 1.5f;
+            float decelRate = DECEL * magneticFactor;
+            
+            if (fabs(angularVelocity) < decelRate * deltaTime) {
+                angularVelocity = 0.0f;
+            } else {
+                angularVelocity -= (angularVelocity > 0.0f ? 1.0f : -1.0f) * decelRate * deltaTime;
+            }
         }
         
         // 更新角度
         angle += angularVelocity * deltaTime;
         
         // 归一化到 0-360° 范围
-        while (angle >= 360.0f) angle -= 360.0f;
-        while (angle < 0.0f) angle += 360.0f;
+        angle = fmodf(angle, 360.0f);
+        if (angle < 0.0f) angle += 360.0f;
     }
 } static g_DiscRotation;
 
@@ -281,11 +292,27 @@ struct PhysicsLayout {
      * 当差值 < 0.1px 时停止更新以节省性能
      */
     void Update(float deltaTime) {
-        // 1. 平滑尺寸缩放 (Spring-like interpolation)
-        currentWidth += (targetWidth - currentWidth) * 12.0f * deltaTime;
-        currentHeight += (targetHeight - currentHeight) * 12.0f * deltaTime;
+        // 1. 防止 deltaTime 过大导致计算失控 (限制在 10 FPS 级别的步长)
+        if (deltaTime > 0.1f) deltaTime = 0.1f;
+
+        // 2. 平滑尺寸缩放 (使用带限制的增量)
+        float speed = 12.0f;
+        float stepX = (targetWidth - currentWidth) * speed * deltaTime;
+        float stepY = (targetHeight - currentHeight) * speed * deltaTime;
+
+        currentWidth += stepX;
+        currentHeight += stepY;
+        
+        // 3. 强制最小尺寸保护，防止底层断言失败
+        if (currentWidth < 1.0f) currentWidth = 1.0f;
+        if (currentHeight < 1.0f) currentHeight = 1.0f;
         
         if (fabs(currentWidth - targetWidth) > 0.1f || fabs(currentHeight - targetHeight) > 0.1f) {
+            SetWindowSize((int)currentWidth, (int)currentHeight);
+        } else {
+            // 逼近目标时强制对齐，确保动画完美结束
+            currentWidth = targetWidth;
+            currentHeight = targetHeight;
             SetWindowSize((int)currentWidth, (int)currentHeight);
         }
     }
@@ -470,21 +497,40 @@ int main() {
     float entranceOffset = 40.0f; // 起始位移 (从下方滑入)
     float entranceAlpha = 0.0f;   // 起始透明度
 
+    // 颜色定义 (Cyan Theme - Back to original per user request)
+    Color THEME_PRIMARY = { 0, 255, 200, 255 };    // 青色高亮
+    Color THEME_SECONDARY = { 0, 200, 180, 180 };  // 次要文字
+    Color THEME_BG = { 10, 20, 25, 180 };          // 深青空背景
+    Color THEME_BAR_BG = { 255, 255, 255, 40 };
+    Color THEME_RED = { 255, 58, 58, 255 };        // 保留红作为辅助色或Toast
+
     // 3. 加载中文字体 
     int codepointCount = 95 + (0x9FFF - 0x4E00 + 1);
     int* codepoints = (int*)malloc(codepointCount * sizeof(int));
     for (int i = 0; i < 95; i++) codepoints[i] = 32 + i;
     for (int i = 0; i < (0x9FFF - 0x4E00 + 1); i++) codepoints[95 + i] = 0x4E00 + i;
     
+    // 3. 加载中文字体 - 多重后备机制
     Font font = LoadFontEx("C:/Windows/Fonts/simhei.ttf", 20, codepoints, codepointCount);
     if (font.baseSize == 0) font = LoadFontEx("C:/Windows/Fonts/msyh.ttc", 20, codepoints, codepointCount);
+    if (font.baseSize == 0) font = LoadFontEx("C:/Windows/Fonts/simsun.ttc", 20, codepoints, codepointCount);
     if (font.baseSize == 0) font = GetFontDefault();
     SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
     free(codepoints);
 
     // 辅助绘制函数
     auto DrawUI = [&](const char* text, int x, int y, int size, Color color) {
-        DrawTextEx(font, text, Vector2{(float)x+1, (float)y+1}, (float)size, 1.0f, ColorAlpha(BLACK, 0.3f));
+        float energyPulse = Netease::Visualizer::Instance().GetEnergyPulse();
+        
+        // 动态呼吸光 (Pulse Glow) - 仅当有音频脉冲时
+        if (energyPulse > 0.2f) {
+            float glowAlpha = (energyPulse - 0.2f) * 0.4f * (color.a / 255.0f);
+            DrawTextEx(font, text, Vector2{(float)x, (float)y}, (float)size, 1.0f, ColorAlpha(THEME_PRIMARY, glowAlpha));
+            // 二次发光增强边缘
+            DrawTextEx(font, text, Vector2{(float)x, (float)y}, (float)size, 1.0f, ColorAlpha(WHITE, glowAlpha * 0.5f));
+        }
+
+        DrawTextEx(font, text, Vector2{(float)x+1.5f, (float)y+1.5f}, (float)size, 1.0f, ColorAlpha(BLACK, 0.4f * (color.a / 255.0f)));
         DrawTextEx(font, text, Vector2{(float)x, (float)y}, (float)size, 1.0f, color);
     };
 
@@ -530,13 +576,6 @@ int main() {
     double restartStartTime = 0;
     bool isRestarting = false;
 
-    // 颜色定义 (Cyan Theme - Back to original per user request)
-    Color THEME_PRIMARY = { 0, 255, 200, 255 };    // 青色高亮
-    Color THEME_SECONDARY = { 0, 200, 180, 180 };  // 次要文字
-    Color THEME_BG = { 10, 20, 25, 180 };          // 深青空背景
-    Color THEME_BAR_BG = { 255, 255, 255, 40 };
-    Color THEME_RED = { 255, 58, 58, 255 };        // 保留红作为辅助色或Toast
-
     while (!WindowShouldClose()) {
         double currentTime = GetTime();
 
@@ -581,7 +620,7 @@ int main() {
             }
         }
 
-        // --- 窗口布局物理更新 ---
+        // --- 窗口布局物理更新 (Ease-Out 增强) ---
         g_Layout.Update(GetFrameTime());
 
         // --- 全局快捷键处理 (需按住 Ctrl) ---
@@ -670,10 +709,10 @@ int main() {
         auto bands = Netease::FftHelper::CalculateBands(magnitudes, 32);
         Netease::Visualizer::Instance().Update(bands, deltaTime);
 
-        // --- 更新入场动画 ---
+        // --- 更新入场动画 (Ease-Out Snappier) ---
         if (entranceOffset > 0.1f) {
-            entranceOffset += (0.0f - entranceOffset) * 0.1f;
-            entranceAlpha += (1.0f - entranceAlpha) * 0.1f;
+            entranceOffset += (0.0f - entranceOffset) * 0.15f; // 从 0.1 -> 0.15 提升响应速度
+            entranceAlpha += (1.0f - entranceAlpha) * 0.15f;
         } else {
             entranceOffset = 0;
             entranceAlpha = 1.0f;
@@ -1109,9 +1148,12 @@ int main() {
         EndDrawing();
     }
     
-    // === Cleanup: 正确释放所有资源 ===
+    // === Cleanup: 正确释放所有资源 (VRAM Leak Prevention) ===
     Netease::AudioCapture::Instance().Stop();
     Netease::AlbumCover::ClearTextureCache();
+    
+    // 卸载可能残留的封面纹理
+    if (g_SongCache.coverTexture.id != 0) UnloadTexture(g_SongCache.coverTexture);
     
     // 释放所有 Shader
     if (g_MaskShader.id != 0) UnloadShader(g_MaskShader);
