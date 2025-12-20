@@ -46,3 +46,17 @@ add_custom_command(TARGET NeteaseMonitor POST_BUILD
         "$<TARGET_FILE_DIR:NeteaseMonitor>/resources/shaders"
     COMMENT "Copying shader resources to output directory..."
 )
+
+# ============================================================
+# 安装规则 (v0.1.1 修复)
+# ============================================================
+
+# 安装可执行文件到 bin/${ARCH_SUFFIX}
+install(TARGETS NeteaseMonitor
+    RUNTIME DESTINATION bin/${ARCH_SUFFIX}
+)
+
+# 安装着色器资源到 bin/${ARCH_SUFFIX}/resources/shaders
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/resources/shaders"
+    DESTINATION bin/${ARCH_SUFFIX}/resources
+)

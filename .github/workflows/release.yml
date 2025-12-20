@@ -3,7 +3,7 @@ name: Release Build
 on:
   push:
     tags:
-      - 'v*.*.*'  # 触发条件: 推送 v0.1.0 等版本 tag
+      - 'v*.*.*'  # 触发条件: 推送 v0.1.1 等版本 tag
   workflow_dispatch:  # 允许手动触发
 
 permissions:
@@ -96,6 +96,24 @@ jobs:
           - **沉浸式黑胶渲染**: 经过微调的 **1.2 RPM** 极慢旋转感，完美还原网易云沉浸式播放体验。
           - **可视化进阶**: 引入流体丝线与粒子系统，支持极光背景与玻璃拟态 Shader 渲染。
           - **物理动效**: 增加唱针（Tonearm）平滑升降物理模拟。
+          
+          ### 📦 Release 包使用说明
+          
+          **快速上手**：
+          1. 解压 zip 文件
+          2. 进入 `bin/x64` (或 `bin/x86`) 目录
+          3. 直接运行 `NeteaseMonitor.exe`
+          4. 首次使用按 `Ctrl + I` 安装 Hook，程序将自动重启网易云音乐
+          
+          **系统要求**：
+          - Windows 7 / 8 / 10 / 11 (x86 或 x64)
+          - [VC++ 2015-2022 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+          - 网易云音乐客户端
+          
+          **常见问题**：
+          - 启动报错 "找不到 MSVCP140.dll" → 安装 VC++ 运行库
+          - 歌词显示乱码 → 确认系统已安装中文字体（黑体/微软雅黑）
+          - 无法连接 → 确认已按 `Ctrl + I` 安装 Hook 并重启网易云
           
           ### 🛠 构建修复与审计
           - 修复 `NeteaseDriver::Instance()` 符号丢失导致的 LNK2019 链接错误。

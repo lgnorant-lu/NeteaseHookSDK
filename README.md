@@ -1,4 +1,4 @@
-# NeteaseHookSDK (v0.1.0)
+# NeteaseHookSDK (v0.1.1)
 
 **[状态: BETA]** **[架构: Hybrid (CDP + WebAPI)]** **[平台: Windows x86/x64]**
  
@@ -11,7 +11,7 @@ NeteaseHookSDK 是针对网易云音乐 (Netease Cloud Music) 桌面客户端的
 
 通过利用 Electron 框架内置的 Chrome DevTools Protocol (CDP) 调试接口，本项目构建了一个非侵入式的 IPC 桥接层，同时结合轻量级 WebAPI 客户端，实现了**“状态监听 + 数据补全”**的双模工作流。
 
-**版本**: 0.1.0 (Integration Beta)
+**版本**: 0.1.1 (Integration Beta)
 
 ## 2. 技术规格
 
@@ -145,11 +145,23 @@ bool Netease_InstallHook(const char* dllPath);
 NeteaseHookSDK-v0.1.0/
 ├── bin/
 │   ├── x86/              # [32位]
+│   │   ├── NeteaseMonitor.exe  # Demo 应用
 │   │   ├── NeteaseDriver.dll
-│   │   └── version.dll
+│   │   ├── version.dll
+│   │   └── resources/          # 运行时资源
+│   │       └── shaders/
+│   │           ├── aurora.fs
+│   │           ├── glass.fs
+│   │           └── circle_mask.fs
 │   └── x64/              # [64位]
+│       ├── NeteaseMonitor.exe  # Demo 应用
 │       ├── NeteaseDriver.dll
-│       └── version.dll
+│       ├── version.dll
+│       └── resources/          # 运行时资源
+│           └── shaders/
+│               ├── aurora.fs
+│               ├── glass.fs
+│               └── circle_mask.fs
 ├── include/              # [开发] 头文件
 │   ├── NeteaseDriver.h   # CDP 驱动核心接口
 │   ├── NeteaseAPI.h      # WebAPI 工具接口 (v0.1.0)
@@ -163,11 +175,18 @@ NeteaseHookSDK-v0.1.0/
 ```
  
 ### 快速使用指引
-1.  **运行**: 将 `bin/*.dll` 复制到程序运行目录。
-2.  **开发**: 
-    - 将 `include` 目录添加到编译器的 Include Path。
-    - 将 `lib` 目录添加到链接器的 Library Path。
-    - 链接 `NeteaseDriver.lib`。
+
+#### A. 运行 Demo 应用
+1.  **进入对应架构目录**: `cd bin/x64` (或 `bin/x86`)
+2.  **直接运行**: `NeteaseMonitor.exe`
+3.  **首次安装 Hook**: 按 `Ctrl + I`，程序将自动部署并重启网易云
+4.  **最低需求**: Windows 7+ 系统，需安装 [VC++ 2015-2022 运行库](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
+#### B. 集成到开发项目
+1.  将 `include` 目录添加到编译器的 Include Path。
+2.  将 `lib` 目录添加到链接器的 Library Path。
+3.  链接 `NeteaseDriver.lib`。
+4.  将 `bin/{arch}/NeteaseDriver.dll` 复制到程序运行目录。
  
 ## 9. 目录结构 (源码)
  

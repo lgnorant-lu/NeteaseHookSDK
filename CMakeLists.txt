@@ -13,7 +13,7 @@
 # ============================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(NeteaseHookSDK VERSION 0.1.0 LANGUAGES CXX)
+project(NeteaseHookSDK VERSION 0.1.1 LANGUAGES CXX)
 
 # 支持多架构构建 (x86/x64)
 # 使用 cmake -A x64 或 -A Win32 来指定目标架构
@@ -105,7 +105,7 @@ endif()
 # ============================================================
 
 # 安装二进制文件 (按架构分类)
-install(TARGETS NeteaseDriver version
+install(TARGETS NeteaseDriver version NeteaseMonitor
     RUNTIME DESTINATION bin/${ARCH_SUFFIX}
     LIBRARY DESTINATION bin/${ARCH_SUFFIX}
     ARCHIVE DESTINATION lib/${ARCH_SUFFIX}
