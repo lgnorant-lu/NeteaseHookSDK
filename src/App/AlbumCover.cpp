@@ -1,7 +1,7 @@
 /**
  * AlbumCover.cpp - 专辑封面下载与缓存实现
  * 
- * NeteaseHookSDK v0.1.0
+ * NeteaseHookSDK v0.1.2
  */
 
 // #define STB_IMAGE_IMPLEMENTATION

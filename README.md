@@ -1,4 +1,4 @@
-# NeteaseHookSDK (v0.1.1)
+# NeteaseHookSDK (v0.1.2)
 
 **[状态: BETA]** **[架构: Hybrid (CDP + WebAPI)]** **[平台: Windows x86/x64]**
  
@@ -11,7 +11,7 @@ NeteaseHookSDK 是针对网易云音乐 (Netease Cloud Music) 桌面客户端的
 
 通过利用 Electron 框架内置的 Chrome DevTools Protocol (CDP) 调试接口，本项目构建了一个非侵入式的 IPC 桥接层，同时结合轻量级 WebAPI 客户端，实现了**“状态监听 + 数据补全”**的双模工作流。
 
-**版本**: 0.1.1 (Integration Beta)
+**版本**: 0.1.2 (Integration Beta)
 
 ## 2. 技术规格
 
@@ -43,10 +43,13 @@ SDK 驱动层通过 WebSocket 连接至渲染进程，动态注入代码注册 `
 *   **Robust Parsers**: 手写状态机 JSON 解析器，完美处理转义字符与异常响应。
 
 ### 3.5 标准化日志系统 (Standardized Logging)
-*   **统一格式**: `[时间][级别][模块] 消息`.
-*   **多模块解耦**: 为 API, Driver, Audio 捕获等模块设置独立 Tag, 支持定向审计.
-*   **可重定向**: 支持注册回调函数接管所有 SDK 内部日志, 方便集成到各类监控系统.
-*   **线程安全**: 统一受锁保护的控制台输出, 防止多线程日志交错.
+*   **跨模块同步**: 日志状态同步在 DLL 内核，确保主程序与驱动层开关完全一致。
+*   **分级审计**: 为 API, Driver, Audio 捕获等模块设置独立 Tag, 支持定向审计.
+*   **绝对静默 (Absolute Silence)**: v0.1.2 新增物理级静默接口，通过重定向 `stderr` 到 `NUL` 强力压制所有第三方库噪音。
+
+### 3.6 健壮性与稳定性 (Robustness)
+*   **端口冲突识别**: 自动检测 9222 端口是否被非网易云程序占用（如 Chrome 调试页、验证码 Mock 等）。
+*   **重连退避机制 (Backoff)**: 驱动层与应用层重连间隔优化为 3s，彻底解决连接失败时的“死循环刷屏”问题。
 
 ## 4. 构建与部署
 
@@ -124,14 +127,12 @@ target_link_libraries(YourApp PRIVATE NeteaseDriver)
 详细接口定义请参阅 [API 参考手册](docs/API.md)。
 
 ```c
-// 连接驱动 (内部启动监控线程)
-bool Netease_Connect(int port);
+// 物理级彻底静默 (压制所有噪音)
+void Netease_SetAbsoluteSilence(bool enable);
 
-// 获取原子状态快照
-bool Netease_GetState(NeteaseState* outState);
-
-// 注册事件回调 (ISR风格)
-void Netease_SetTrackChangedCallback(Netease_Callback callback);
+// 逻辑日志开关与级别
+void Netease_SetGlobalLogging(bool enabled);
+void Netease_SetGlobalLogLevel(int level);
 
 // 自动安装 Hook
 bool Netease_InstallHook(const char* dllPath);
@@ -142,7 +143,7 @@ bool Netease_InstallHook(const char* dllPath);
 从 GitHub Release 下载的压缩包 (`.zip`) 解压后包含以下目录：
  
 ```text
-NeteaseHookSDK-v0.1.0/
+NeteaseHookSDK-v0.1.2/
 ├── bin/
 │   ├── x86/              # [32位]
 │   │   ├── NeteaseMonitor.exe  # Demo 应用
@@ -164,9 +165,10 @@ NeteaseHookSDK-v0.1.0/
 │               └── circle_mask.fs
 ├── include/              # [开发] 头文件
 │   ├── NeteaseDriver.h   # CDP 驱动核心接口
-│   ├── NeteaseAPI.h      # WebAPI 工具接口 (v0.1.0)
+│   ├── NeteaseAPI.h      # WebAPI 工具接口 (v0.1.2)
 │   ├── SharedData.hpp    # 跨模块状态结构定义
-│   └── SimpleLog.h       # 标准化日志系统 (v0.1.0)
+│   ├── SimpleLog.h       # 标准化日志系统 (v0.1.2)
+│   └── LogRedirect.h     # 物理重定向工具 (v0.1.2)
 ├── lib/                  # [开发] 静态导入库
 │   └── NeteaseDriver.lib # 链接时使用 (仅 MSVC)
 ├── examples/             # [示例]

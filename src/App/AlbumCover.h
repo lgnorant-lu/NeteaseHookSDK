@@ -2,7 +2,7 @@
 /**
  * AlbumCover.h - 专辑封面下载与缓存模块
  * 
- * NeteaseHookSDK v0.1.0
+ * NeteaseHookSDK v0.1.2
  * 
  * 功能：
  * - 从 URL 下载封面图片

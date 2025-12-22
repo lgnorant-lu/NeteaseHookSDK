@@ -2,9 +2,12 @@
  * main.cpp - 网易云音乐 Hook SDK 测试程序
  * 
  * 使用 Raylib 显示播放进度 (Glassmorphism UI)
- * v0.1.0: 集成 Netease::API 显示歌词和元数据
+ * v0.1.2: 集成 Netease::API 显示歌词和元数据, 添加日志控制
  */
 
+// v0.1.2: 完全隔离 Windows API，防止宏污染 Raylib 符号
+// 参考 MemoryMonitor.cpp 的文件隔离模式
+#include <LogRedirect.h>  // 文件日志重定向 (SDK 实现)
 #include "raylib.h"
 #include "rlgl.h"
 #include "NeteaseDriver.h"
@@ -443,10 +446,83 @@ void OnTrackChanged(const std::string& songId) {
     // 注意：不要在这里直接调用 Raylib 绘图函数，因为这是后台线程
 }
 
-int main() {
+// v0.1.2: 自定义 Raylib 日志回调 (用于文件重定向)
+static FILE* g_LogFile = nullptr;
+void CustomRaylibLogCallback(int logLevel, const char* text, va_list args) {
+    if (g_LogFile) {
+        char buffer[1024];
+        vsnprintf(buffer, sizeof(buffer), text, args);
+        fprintf(g_LogFile, "[RAYLIB] %s\n", buffer);
+        fflush(g_LogFile);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    // v0.1.2: 立即禁用所有日志，防止启动时输出
+    SetTraceLogLevel(LOG_NONE);                // Raylib 日志
+    NeteaseDriver::SetGlobalLogging(false);    // SDK 默认静默
+    
+    // v0.1.2: 解析命令行参数
+    bool verboseMode = false;
+    bool helpRequested = false;
+    std::string logFilePath;
+    
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            helpRequested = true;
+        } else if (arg == "--verbose" || arg == "-v") {
+            verboseMode = true;
+        } else if (arg == "--silent" || arg == "-s") {
+            verboseMode = false;
+        } else if (arg.find("--log=") == 0) {
+            logFilePath = arg.substr(6);
+            verboseMode = true; // 日志文件模式隐含开启日志
+        }
+    }
+    
+    // 如果请求帮助，输出帮助信息并立即退出（不初始化任何资源）
+    if (helpRequested) {
+        std::cout << "NeteaseHookSDK Monitor v0.1.2\n";
+        std::cout << "\nUsage: NeteaseMonitor.exe [options]\n";
+        std::cout << "\nOptions:\n";
+        std::cout << "  --verbose, -v      Enable verbose logging\n";
+        std::cout << "  --silent, -s       Force silent mode (default)\n";
+        std::cout << "  --log=<file>       Redirect logs to file\n";
+        std::cout << "  --help, -h         Show this help message\n";
+        std::cout << "\nKeyboard Shortcuts:\n";
+        std::cout << "  Ctrl+I             Install Hook\n";
+        std::cout << "  Ctrl+K             Restart Netease Cloud Music\n";
+        std::cout << "  Ctrl+R             Refresh install path\n";
+        return 0;
+    }
+    
+    // v0.1.2: 实施静默策略
+    if (!verboseMode) {
+        // [绝对沉默] 重定向 stderr 到 NUL 并关闭逻辑日志
+        SetTraceLogLevel(LOG_NONE); // 同时也关闭 Raylib 内部输出
+        NeteaseDriver::SetAbsoluteSilence(true);
+    } else {
+        // 1. 设置正常日志级别
+        SetTraceLogLevel(LOG_INFO);
+        NeteaseDriver::SetGlobalLogging(true);
+        
+        // 2. 如果指定了日志文件，进行重定向
+        if (!logFilePath.empty()) {
+            if (RedirectStderrToFile(logFilePath.c_str())) {
+                g_LogFile = stderr;  // 标记已重定向
+                SetTraceLogCallback(CustomRaylibLogCallback);
+            }
+        }
+    }
+
+    LOG_DEBUG("窗口初始化中...");
+
     // 1. 设置窗口标志：无边框 + 透明 + 顶层
     SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_TRANSPARENT | FLAG_WINDOW_TOPMOST);
-    InitWindow(UIConstants::COMPACT_WIDTH, UIConstants::COMPACT_HEIGHT, "NCM Widget v0.1.0");
+    InitWindow(UIConstants::COMPACT_WIDTH, UIConstants::COMPACT_HEIGHT, "NCM Widget v0.1.2");
+    
+    // v0.1.2: 窗口初始化完成
     SetTargetFPS(60); 
 
     // 2. 加载着色器 (修复路径搜索逻辑)
@@ -563,7 +639,7 @@ int main() {
     
     bool connected = driver.Connect(9222);
 
-    // v0.1.0: 初始化音频采集 (WASAPI Loopback)
+    // v0.1.2: 初始化音频采集 (WASAPI Loopback)
     Netease::AudioCapture::Instance().Start();
     
     std::string installPath = NeteaseDriver::GetInstallPath();
@@ -659,18 +735,14 @@ int main() {
         }
 
         // --- 非阻塞重启逻辑 ---
+        static double nextRetryTime = 0;
         if (isRestarting) {
-            if (currentTime - restartStartTime > 2.0) {
-                // 等待超时，尝试重新连接
+            if (currentTime - restartStartTime > 2.0 && currentTime > nextRetryTime) {
                 connected = driver.Connect(9222);
                 if (connected) {
                     isRestarting = false;
                 } else {
-                    // 持续尝试重连 (每0.5秒)
-                    if (fmod(currentTime, 1.0) < 0.1) {
-                         connected = driver.Connect(9222);
-                         if (connected) isRestarting = false;
-                    }
+                    nextRetryTime = currentTime + 3.0;
                 }
             }
         } else {
@@ -703,7 +775,7 @@ int main() {
         g_DiscRotation.Update(state.isPlaying == 1, deltaTime);
         g_Tonearm.Update(state.isPlaying == 1, deltaTime);
         
-        // --- v0.1.0: 更新频谱分析 ---
+        // --- v0.1.2: 更新频谱分析 ---
         auto samples = Netease::AudioCapture::Instance().GetSamples(1024);
         auto magnitudes = Netease::FftHelper::Analyze(samples);
         auto bands = Netease::FftHelper::CalculateBands(magnitudes, 32);
@@ -783,7 +855,7 @@ int main() {
             EndShaderMode();
         }
 
-        // --- 处理 Toast 触发 + v0.1.0: 加载歌曲信息 ---
+        // --- 处理 Toast 触发 + v0.1.0 加载歌曲信息 ---
         if (g_HasNewSong) {
             std::string newId;
             {
@@ -793,7 +865,7 @@ int main() {
             }
             
             
-            // v0.1.0: 解析数字ID并加载元数据/歌词
+            // v0.1.0 解析数字ID并加载元数据/歌词
             long long numericId = ParseNumericSongId(newId);
             
             if (numericId != g_SongCache.numericId && numericId > 0) {
@@ -862,7 +934,7 @@ int main() {
             g_Toast.startTime = currentTime;
         }
         
-        // v0.1.0: 更新歌词系统状态
+        // v0.1.0 更新歌词系统状态
         g_SongCache.lyrics.UpdateIndex(state.currentProgress);
         
         // 更新 Toast 动画 (Fade out after 3s)
@@ -888,7 +960,7 @@ int main() {
         DrawRectangleRounded(Rectangle{0, 0, g_Layout.currentWidth, g_Layout.currentHeight}, 
             UIConstants::CORNER_ROUNDNESS, UIConstants::CORNER_SEGMENTS, glassBg);
         
-        // v0.1.0: 绘制声学风暴可视化 (覆盖全屏背景，放在玻璃背景之上，文字之下)
+        // v0.1.0 绘制声学风暴可视化 (覆盖全屏背景，放在玻璃背景之上，文字之下)
         // 回归原本青色主题
         Netease::Visualizer::Instance().Draw((int)g_Layout.currentWidth, (int)g_Layout.currentHeight, THEME_PRIMARY);
         

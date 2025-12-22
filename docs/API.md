@@ -1,4 +1,4 @@
-# API 参考手册 (API Reference)
+# API 参考手册 (API Reference) [v0.1.2]
 
 ## 1. 概述
 
@@ -60,7 +60,55 @@ void Netease_SetLogCallback(Netease_LogCallback callback);
 ```
 接管 SDK 内部日志输出。
 
-## 4. 辅助与安装接口 (Utility & Installer)
+## 4. 日志控制接口 (Logging Control) [v0.1.2+]
+
+### `Netease_SetGlobalLogging`
+```c
+void Netease_SetGlobalLogging(bool enabled);
+```
+全局开关：启用或禁用 SDK 内部日志输出。
+*   **enabled**: `true` 启用日志，`false` 禁用日志
+*   **默认值**: `false` (静默模式)
+
+> **重要**: SDK 默认不输出任何日志，确保不干扰宿主程序的标准输出。
+
+### `Netease_SetGlobalLogLevel`
+```c
+void Netease_SetGlobalLogLevel(int level);
+```
+设置日志过滤级别。
+*   **level**: `0`=ERROR, `1`=WARN, `2`=INFO, `3`=DEBUG
+*   **默认值**: `2` (INFO)
+
+### `Netease_SetAbsoluteSilence`
+```c
+void Netease_SetAbsoluteSilence(bool enable);
+```
+物理级静默控制。
+*   **enable**: `true` 将 `stderr` 重定向到 `NUL` (彻底压制所有输出，包括第三方库噪音)；`false` 恢复标准输出。
+*   **适用场景**: 生产环境集成，需要 100% 洁净的控制台。
+*   **注意**: 开启后，所有调试日志（即使已开启）都将不可见。
+
+### 示例: 调试模式
+```c
+// 开启调试日志
+Netease_SetGlobalLogging(true);
+Netease_SetGlobalLogLevel(3);  // 显示所有日志，包括 DEBUG
+
+Netease_Connect(9222);
+// ... 调试完成后
+Netease_SetGlobalLogging(false);  // 恢复静默
+```
+
+### 示例: 生产环境静默
+```c
+// 完全静默模式（推荐用于自动化工具）
+Netease_SetAbsoluteSilence(true);  // 物理级压制所有输出
+Netease_Connect(9222);
+// ... 即使 WebSocket 连接失败，也不会有任何终端输出
+```
+
+## 5. 辅助与安装接口 (Utility & Installer)
 
 ### `Netease_GetInstallPath`
 ```c
@@ -92,9 +140,9 @@ bool Netease_RestartApplication(const char* installPath);
 强制重启网易云音乐进程以应用 Hook。
 *   **installPath**: 指定安装路径（若为 NULL 则自动获取）。
 
-## 5. C++ 工具模块 (Netease::API)
+## 6. C++ 工具模块 (Netease::API)
 
-自 v0.1.0 起，SDK 提供了 `Netease::API` 静态类，封装了网易云音乐 WebAPI，用于直接获取歌词和元数据。此功能不依赖 Hook，而是直接进行 HTTP 请求。
+自 v0.1.2 起，SDK 提供了 `Netease::API` 静态类，封装了网易云音乐 WebAPI，用于直接获取歌词和元数据。此功能不依赖 Hook，而是直接进行 HTTP 请求。
 
 **头文件**: `#include <NeteaseAPI.h>`  
 **命名空间**: `Netease`

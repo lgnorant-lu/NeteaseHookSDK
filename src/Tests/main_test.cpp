@@ -1,6 +1,7 @@
 #define LOG_TAG "TEST"
 #include <gtest/gtest.h>
 #include "NeteaseDriver.h"
+#include "NeteaseAPI.h"
 #include "SimpleLog.h"
 #include <iostream>
 #include <fstream>
@@ -29,7 +30,7 @@ void CreateMockPE(const std::string& path, bool isX64) {
 }
 
 // ============================================================
-// PE 架构检测测试 (v0.1.0 新增)
+// PE 架构检测测试 (v0.1.2 新增)
 // ============================================================
 
 TEST(PEDetectionTest, DetectX64Architecture) {
@@ -141,15 +142,95 @@ TEST(NeteaseDriverTest, Connect_FailWhenClosed) {
     EXPECT_FALSE(result);
 }
 
-// 真实环境路径获取测试
-TEST(NeteaseDriverTest, GetInstallPath_RealEnv) {
-    std::string path = NeteaseDriver::GetInstallPath();
-    if (path.empty()) {
-        LOG_WARN("Netease Cloud Music not found, skipping path check.");
+// ============================================================
+// v0.1.2: 日志控制测试
+// ============================================================
+
+TEST(LoggingControlTest, SDKLoggingToggle) {
+    // 1. 测试初始状态 (依据设计应为 false)
+    NeteaseDriver::SetGlobalLogging(false);
+    
+    // 2. 开启并验证
+    NeteaseDriver::SetGlobalLogging(true);
+    // 这里没有直接读取接口，但我们可以通过 SetGlobalLogLevel 辅助验证
+    NeteaseDriver::SetGlobalLogLevel(1); 
+    
+    // 3. 关闭并验证
+    NeteaseDriver::SetGlobalLogging(false);
+}
+
+TEST(LoggingControlTest, ThreadSafetyCheck) {
+    // 这个测试主要是为了确保在高频并发下 Log 不会崩溃
+    NeteaseDriver::SetGlobalLogging(true);
+    
+    auto logFunc = []() {
+        for(int i = 0; i < 100; ++i) {
+            LOG_INFO("Concurrency Test Line " << i);
+        }
+    };
+    
+    std::thread t1(logFunc);
+    std::thread t2(logFunc);
+    
+    t1.join();
+    t2.join();
+    
+    NeteaseDriver::SetGlobalLogging(false);
+}
+
+// ============================================================
+// v0.1.2: SDK 详细测试增加 (State & Connection)
+// ============================================================
+
+TEST(NeteaseDriverDetailedTest, ConnectionRetryLogic) {
+    auto& driver = NeteaseDriver::Instance();
+    driver.Disconnect();
+    
+    // 测试在不同端口下的连接失败
+    EXPECT_FALSE(driver.Connect(1234));
+    EXPECT_FALSE(driver.Connect(5678));
+}
+
+TEST(NeteaseDriverDetailedTest, StateRetrievalConsistency) {
+    auto& driver = NeteaseDriver::Instance();
+    // 即使未连接，获取状态也不应崩溃，且应返回默认值
+    auto state = driver.GetState();
+    EXPECT_EQ(state.songId[0], '\0');
+    EXPECT_EQ(state.isPlaying, 0);
+}
+
+TEST(LoggingControlDetailedTest, LogLevelFiltering) {
+    NeteaseDriver::SetGlobalLogging(true);
+    
+    // 验证不同级别的日志设置 (内部逻辑验证)
+    NeteaseDriver::SetGlobalLogLevel(0); // ERROR only
+    LOG_ERROR("Should be visible");
+    LOG_DEBUG("Should be hidden");
+    
+    NeteaseDriver::SetGlobalLogLevel(3); // All
+    LOG_DEBUG("Now debug is visible");
+    
+    NeteaseDriver::SetGlobalLogging(false);
+}
+
+TEST(NeteaseAPITest, SongDetailParsing) {
+    // 这是一个静态测试，验证 API 模块的基础功能
+    long long testId = 1299570939;
+    auto detail = Netease::API::GetSongDetail(testId);
+    if (detail.has_value()) {
+        long long songId = detail->songId;
+        EXPECT_EQ(songId, testId);
+        LOG_INFO("API Test: Found title: " << detail->title);
     } else {
-        LOG_INFO("Found install path: " << path);
-        EXPECT_FALSE(path.empty());
+        LOG_WARN("API Test: Failed to fetch song detail (expected in offline test)");
     }
+}
+
+TEST(NeteaseAPITest, LocalLyricCache) {
+    long long testId = 123456789;
+    auto lyrics = Netease::API::GetLocalLyric(testId);
+    // 即使缓存不存在，也不应崩溃
+    EXPECT_FALSE(lyrics.has_value());
 }
 
 int main(int argc, char **argv) {

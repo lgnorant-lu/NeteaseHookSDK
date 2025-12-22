@@ -1,7 +1,7 @@
 /**
  * NeteaseAPI.cpp - 网易云音乐数据获取工具实现
  * 
- * 网易云音乐 Hook SDK v0.1.0
+ * 网易云音乐 Hook SDK v0.1.2
  */
 
 #include "NeteaseAPI.h"

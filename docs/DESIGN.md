@@ -11,7 +11,7 @@
 3.  **Utility Layer (Utils)**: 提供 WebAPI 客户端与缓存管理。
 4.  **Application Layer (SDK)**: 提供业务逻辑封装与 API 导出。
 
-**版本**: 0.1.0 (Integration Beta)
+**版本**: 0.1.2 (Integration Beta)
 
 ## 2. 模块详解 (Module Deep Dive)
 
@@ -75,14 +75,19 @@ SDK 核心静态库内置了全自动的部署逻辑 (`src/Driver/NeteaseDriver.
     2.  **Write Path**: 在线获取成功后，将数据序列化为网易云兼容的 JSON 格式，写入 SDK 专用缓存目录，确保持久化且不干扰官方客户端。
     3.  **Atomic Write**: 采用“写入临时文件 -> MoveFileEx 原子替换”的策略，防止在文件写入过程中包含部分数据导致的读取错误。
 
-### 2.4 日志子系统 (Logging Subsystem)
+### 2.4 日志子系统 (Logging Subsystem) [v0.1.2 增强]
 
-自 v0.1.0 起，项目引入了标准化的轻量级日志子系统 (`src/Shared/SimpleLog.h`)。
+项目引入了标准化的轻量级日志子系统 (`src/Shared/SimpleLog.h`)，并针对跨模块调用进行了专项优化。
 
-*   **架构设计**: 采用单头文件宏定义实现，无运行时性能损耗（在非调试场景下）。
-*   **统一输出**: 所有模块统一使用 `std::cerr` 作为输出流，有效避免了多线程环境下 `stdout` 缓冲区的竞争与行交错问题。
-*   **动态标签 (LOG_TAG)**: 每个模块均定义唯一的 `LOG_TAG`（如 `DRIVER`, `API`, `COVER`），日志格式固定为：`[HH:MM:SS][LEVEL][TAG] Message`。
-*   **回调接管**: 驱动层支持 `Netease_SetLogCallback`，允许第三方应用（如 GUI 程序、日志系统）通过函数指针重定向并接替 SDK 的控制台输出。
+*   **跨模块同步 (Cross-Module Sync)**: 日志控制变量不再使用局部静态变量，而是统一存储在 `NeteaseDriver.dll` 的全局段中。EXE 通过导出函数查询 DLL 状态，确保两者始终同步。
+*   **物理级静默 (Absolute Silence)**: 实现了一个物理级重定向工具 (`LogRedirect`)。它通过 Windows CRT 函数 `_dup2` 将标准错误描述符 (`stderr`, FD 2) 强行指向空设备 (`NUL`)。这不仅能压制 SDK 日志，还能有效屏蔽底层 WebSocket 和 HTTP 库强制输出到终端的各类报错信息。
+*   **统一格式与 TAG**: 日志格式固定为：`[HH:MM:SS][LEVEL][TAG] Message`。
+*   **回调接管**: 支持 `Netease_SetLogCallback`，允许第三方应用重定向输出。
+
+### 2.5 健壮性保障 (Robustness Mechanism) [v0.1.2 新增]
+
+*   **智能端口占用识别**: 当 9222 端口被非网易云音乐程序（如 Chrome 调试页、阿里云验证码 Mock 或其他本地服务）占用时，SDK 不再盲目尝试连接，而是通过解析 `/json` 响应包中的内容判定其身份。
+*   **重连退避 (Backoff)**: 在 `MonitorLoop` 和主循环重连阶段引入了 3000ms 的硬性休眠间隔。这极大降低了连接失败时的 CPU 负载，并防止由于高频重连导致的终端日志洪峰。
 
 ## 3. 线程与并发模型 (Concurrency Model)
 

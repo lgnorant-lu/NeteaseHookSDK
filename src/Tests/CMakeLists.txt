@@ -9,6 +9,7 @@ add_executable(NeteaseSDKTest
 target_include_directories(NeteaseSDKTest PRIVATE
     ${CMAKE_SOURCE_DIR}/src/Driver/include
     ${CMAKE_SOURCE_DIR}/src/Shared
+    ${CMAKE_SOURCE_DIR}/src/Utils
 )
 
 # 链接依赖

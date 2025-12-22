@@ -1,4 +1,4 @@
-# 网易云音乐 Hook SDK v0.1.0
+# 网易云音乐 Hook SDK v0.1.2
 # ============================================================
 # 
 # 项目说明：
@@ -13,7 +13,7 @@
 # ============================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(NeteaseHookSDK VERSION 0.1.1 LANGUAGES CXX)
+project(NeteaseHookSDK VERSION 0.1.2 LANGUAGES CXX)
 
 # 支持多架构构建 (x86/x64)
 # 使用 cmake -A x64 或 -A Win32 来指定目标架构
@@ -30,8 +30,8 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 
-# 可选模块开关 (默认关闭测试以加快构建并避免 PDB 冲突)
-option(BUILD_TESTING "构建单元测试" OFF)
+# 可选模块开关
+set(BUILD_TESTING ON CACHE BOOL "构建单元测试" FORCE)  # v0.1.2: 强制开启以确保测试覆盖，覆盖旧 Cache
 option(BUILD_EXAMPLES "构建示例程序" OFF)
 
 # 输出目录 (架构分离)

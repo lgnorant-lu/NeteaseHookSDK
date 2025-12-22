@@ -78,24 +78,27 @@ jobs:
           NeteaseHookSDK-${{ github.ref_name }}-windows-multiarch.zip
         generate_release_notes: true  # 自动生成变更日志 (基于 PR/Commit)
         body: |
-          ## 🚀 NeteaseHookSDK ${{ github.ref_name }} (Integration Beta)
+          ## 🚀 NeteaseHookSDK ${{ github.ref_name }} (Stable Release Candidate)
           
-          本项目是针对网易云音乐 (Netease Cloud Music) 桌面客户端的进程度监控与数据捕获解决方案。v0.1.0 标志着从单纯的 CDP 监听演进为 **"状态监听 + 数据补全"** 的混合架构。
+          本项目是针对网易云音乐 (Netease Cloud Music) 桌面客户端的进程度监控与数据捕获解决方案。v0.1.2 引入了深度的运行时日志控制与稳定性防护。
           
-          ### � 逆向与核心突破 (RE Highlights)
+          ### 🛠 v0.1.2 日志控制与稳定性 (Logging & Stability)
+          - **全运行时控制**: 新增 `--verbose`, `--silent`, `--log=file` 参数，支持动态开启/重定向日志。
+          - **静默优先**: SDK 默认进入静默模式，不再干扰宿主程序的标准输出。
+          - **线程安全日志**: 重构 `SimpleLog` 子系统，引入互斥锁防止并发日志乱序。
+          - **启动安全防护**: 在 WIN32 模式下增加初始化失败反馈，确保无窗口模式下的异常反馈。
+          
+          ### 🏗 核心突破 (RE Highlights)
           - **非侵入式驻留**: 利用 Windows PE 加载特性实现 `version.dll` 劫持，完美避开 V8 引擎底层指针压缩导致的内存扫描失效。
-          - **CDP 桥接技术**: 动态注入 JS Payload 至渲染层，实时捕获 `audioplayer.onPlayProgress` 事件，实现毫秒级同步。
-          - **PE 架构自适应**: 驱动层支持 x86/x64 双架构自适应探测，确保在不同环境下的稳定性。
+          - **CDP 桥接技术**: 动态注入 JS Payload 至渲染层，实时捕获 `audioplayer.onPlayProgress` 事件。
           
           ### ✨ WebAPI & 增强功能
           - **智能歌词系统**: 实现 Cache-Aside 缓存策略，兼容官方加密格式，支持 LRC/翻译/罗马音同步。
-          - **媒体信息提取**: 基于 `WinINet` 实现轻量级元数据获取与专辑封面下载（由 `stb_image` 驱动）。
           - **音频风暴可视化**: 集成 WASAPI 环形捕捉，实时 FFT 频谱分析。
           
           ### 🎨 Demo 应用更新 (NeteaseMonitor)
           - **沉浸式黑胶渲染**: 经过微调的 **1.2 RPM** 极慢旋转感，完美还原网易云沉浸式播放体验。
           - **可视化进阶**: 引入流体丝线与粒子系统，支持极光背景与玻璃拟态 Shader 渲染。
-          - **物理动效**: 增加唱针（Tonearm）平滑升降物理模拟。
           
           ### 📦 Release 包使用说明
           
@@ -108,17 +111,10 @@ jobs:
           **系统要求**：
           - Windows 7 / 8 / 10 / 11 (x86 或 x64)
           - [VC++ 2015-2022 Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
-          - 网易云音乐客户端
-          
-          **常见问题**：
-          - 启动报错 "找不到 MSVCP140.dll" → 安装 VC++ 运行库
-          - 歌词显示乱码 → 确认系统已安装中文字体（黑体/微软雅黑）
-          - 无法连接 → 确认已按 `Ctrl + I` 安装 Hook 并重启网易云
           
           ### 🛠 构建修复与审计
           - 修复 `NeteaseDriver::Instance()` 符号丢失导致的 LNK2019 链接错误。
           - 解决了 x64 环境下 `AudioCapture` 回调函数的生命周期管理冲突。
-          - 归档了 v0.1.0 的全量设计原案至 `Archived/` 目录。
           
           ---
           详细文档请参阅 [README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md)。

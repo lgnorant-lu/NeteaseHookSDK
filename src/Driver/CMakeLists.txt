@@ -13,6 +13,7 @@
 add_library(NeteaseDriver SHARED
     NeteaseDriver.cpp
     CDPController.cpp
+    LogRedirect.cpp
     ${CMAKE_SOURCE_DIR}/src/Utils/NeteaseAPI.cpp  # 网易云 API 工具
     ${CMAKE_SOURCE_DIR}/extern/easywsclient.cpp  # WebSocket 独立编译
 )
@@ -45,8 +46,9 @@ if(MSVC)
     target_compile_options(NeteaseDriver PRIVATE /FS)  # 支持并行编译
 endif()
 
-# 禁用异常（可选优化）
+# 启用导出标志
 target_compile_definitions(NeteaseDriver PRIVATE 
+    NETEASE_DRIVER_EXPORTS=1
     CPPHTTPLIB_NO_EXCEPTIONS=1
 )
 

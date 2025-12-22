@@ -3,7 +3,8 @@
 # ============================================================
 # 
 # 使用 Raylib 显示播放进度的可视化程序
-# v0.1.0: 添加封面系统 (使用 stb_image.h v2.30)
+# v0.1.2: 添加封面系统 (使用 stb_image.h v2.30)
+# v0.1.2: 添加日志控制 + WIN32 子系统 (无控制台窗口)
 #
 # ============================================================
 
@@ -19,6 +20,12 @@ add_executable(NeteaseMonitor
     MemoryMonitor.cpp
 )
 
+# v0.1.2: Release 构建使用 WIN32 子系统 (隐藏控制台窗口)
+# Debug 构建保留控制台以便调试
+set_target_properties(NeteaseMonitor PROPERTIES
+    WIN32_EXECUTABLE $<IF:$<CONFIG:Release>,TRUE,FALSE>
+)
+
 # 调试：打印路径
 message(STATUS "raylib_SOURCE_DIR: ${raylib_SOURCE_DIR}")
 
@@ -28,6 +35,7 @@ target_include_directories(NeteaseMonitor PRIVATE
     ${raylib_SOURCE_DIR}/src
     ${raylib_SOURCE_DIR}/src/external
     ${CMAKE_SOURCE_DIR}/src/Shared
+    ${CMAKE_SOURCE_DIR}/src/Driver/include
 )
 
 # 链接 Driver 库、Raylib 和 WinINet
@@ -48,7 +56,7 @@ add_custom_command(TARGET NeteaseMonitor POST_BUILD
 )
 
 # ============================================================
-# 安装规则 (v0.1.1 修复)
+# 安装规则 (v0.1.2 修复)
 # ============================================================
 
 # 安装可执行文件到 bin/${ARCH_SUFFIX}

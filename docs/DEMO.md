@@ -1,6 +1,6 @@
 # NeteaseMonitor Demo - 技术规格书
 
-**版本**: v0.1.0  
+**版本**: v0.1.2  
 **类型**: 技术展示应用 (SDK功能演示)  
 **框架**: Raylib 5.6-dev  
 **语言**: C++17  
@@ -430,6 +430,28 @@ cmake --build build --config Release --target NeteaseMonitor
 2. 启动网易云音乐
 3. 运行 `NeteaseMonitor.exe`
 
+### 命令行参数 [v0.1.2 新增]
+```powershell
+# 默认静默模式（无控制台输出）
+NeteaseMonitor.exe
+
+# 启用详细日志
+NeteaseMonitor.exe --verbose
+NeteaseMonitor.exe -v
+
+# 强制静默模式
+NeteaseMonitor.exe --silent
+NeteaseMonitor.exe -s
+
+# 重定向日志到文件
+NeteaseMonitor.exe --log=debug.log
+```
+
+**说明**:
+- **默认模式**: SDK 内部使用物理级 `stderr` 重定向，彻底压制所有输出（包括第三方库）。
+- **Verbose 模式**: 将日志输出至控制台，用于调试和问题追踪。
+- **Log 模式**: 日志会自动重定向到指定文件，同时保持控制台洁净。
+
 ### 快捷键
 ```
 Ctrl + I  : 安装 Hook
@@ -450,6 +472,6 @@ Left Drag : 拖拽窗口
 
 ---
 
-**文档版本**: 0.1.0  
-**最后更新**: 2025-12-20  
+**文档版本**: 0.1.2  
+**最后更新**: 2025-12-22  
 **作者**: lgnorant-lu

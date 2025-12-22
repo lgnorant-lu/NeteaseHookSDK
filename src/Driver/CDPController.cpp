@@ -162,16 +162,27 @@ std::string CDPController::GetKernelPageWSUrl() {
     
     std::string body = res->body;
     
-    // 查找 orpheus:// 开头的内核页面
-    size_t orpheusPos = body.find("\"url\":\"orpheus://");
-    if (orpheusPos == std::string::npos) {
-        orpheusPos = body.find("\"url\": \"orpheus://");
-    }
+    // 查找 orpheus:// 开头的内核页面 (更宽松的匹配)
+    // v0.1.2: 允许大小写不敏感或部分匹配，应对不同版本的 NCM
+    std::string bodyLower = body;
+    for (auto &c : bodyLower) c = tolower(c);
+    
+    size_t orpheusPos = bodyLower.find("orpheus://");
     
     if (orpheusPos == std::string::npos) {
-        LOG_ERROR("未找到 orpheus:// 内核页面");
+        // v0.1.2: 冲突检测 - 如果端口通但没有 orpheus，看看是不是被别人占了
+        if (body.find("\"url\"") != std::string::npos) {
+            LOG_ERROR("[CRITICAL] 端口 " << m_Port << " 被非网易云程序占用!");
+            std::string snippet = (body.length() > 300) ? body.substr(0, 300) : body;
+            LOG_ERROR("占用程序响应片段: " << snippet);
+        } else {
+            LOG_ERROR("未找到 orpheus:// 内核页面. /json 响应长度: " << body.length());
+        }
         return "";
     }
+    
+    // 恢复到原始大小写的 body 进行后续处理（防止 URL 损坏）
+    // 注意：orpheusPos 在两者中是一致的
     
     // 找到页面对象的边界
     size_t objStart = body.rfind("{", orpheusPos);

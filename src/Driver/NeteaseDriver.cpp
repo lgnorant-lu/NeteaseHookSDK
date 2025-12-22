@@ -1,15 +1,17 @@
 /**
  * NeteaseDriver.cpp - 网易云音乐播放状态监控 SDK 实现
  * 
- * 网易云音乐 Hook SDK v0.1.0
+ * 网易云音乐 Hook SDK v0.1.2
  */
 
 #define LOG_TAG "DRIVER"
 #include "NeteaseDriver.h"
 #include "CDPController.h"
 #include "SimpleLog.h"
+#include "LogRedirect.h"
 #include <iostream>
 #include <cstring>
+#include <atomic>
 #include <windows.h>
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -66,6 +68,41 @@ void NeteaseDriver::Log(const std::string& level, const std::string& msg) const 
 void NeteaseDriver::SetLogCallback(LogCallback callback) {
     std::lock_guard<std::mutex> lock(m_LogMutex);
     m_LogCallback = callback;
+}
+
+// ============================================================
+// v0.1.2: 全局日志控制内部存储 (跨模块单例存储在 DLL 中)
+// ============================================================
+
+static std::atomic<bool> g_LogEnabled{false};
+static std::atomic<int> g_LogLevel{2}; // INFO
+static bool g_AbsoluteSilence = false;
+
+extern "C" {
+    bool Netease_IsLogEnabled() { return g_LogEnabled.load(); }
+    int Netease_GetLogLevel() { return g_LogLevel.load(); }
+}
+
+void NeteaseDriver::SetGlobalLogging(bool enabled) {
+    g_LogEnabled.store(enabled);
+}
+
+void NeteaseDriver::SetGlobalLogLevel(int level) {
+    g_LogLevel.store(level);
+}
+
+void NeteaseDriver::SetAbsoluteSilence(bool enable) {
+    if (enable == g_AbsoluteSilence) return;
+    
+    if (enable) {
+        if (RedirectStderrToFile("NUL")) {
+            g_AbsoluteSilence = true;
+            g_LogEnabled.store(false); // 同时也关闭内部逻辑日志
+        }
+    } else {
+        RestoreStderr();
+        g_AbsoluteSilence = false;
+    }
 }
 
 // ============================================================
@@ -509,6 +546,9 @@ void NeteaseDriver::MonitorLoop() {
             Log("WARN", "检测到断开连接，尝试自动重连...");
             if (Connect(9222)) { // 默认端口
                 Log("INFO", "自动重连成功!");
+            } else {
+                // v0.1.2: 失败后增加退避时间，避免紧凑死循环
+                std::this_thread::sleep_for(std::chrono::milliseconds(3000));
             }
             continue;
         }

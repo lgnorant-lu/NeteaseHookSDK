@@ -17,6 +17,12 @@ class CDPController;
     #define NETEASE_API
 #endif
 
+// v0.1.2: 日志控制前置声明
+namespace LogControl {
+    void SetEnabled(bool enabled);
+    void SetLevel(int level);
+}
+
 
 /**
  * NeteaseDriver - 网易云音乐播放状态监控 SDK
@@ -92,6 +98,30 @@ public:
      * 重定向 SDK 内部日志
      */
     void SetLogCallback(LogCallback callback);
+
+    // =======================================================
+    // 日志控制 API (v0.1.2)
+    // =======================================================
+    
+    /**
+     * 全局开关: 启用或禁用 SDK 内部日志输出
+     * 默认关闭，确保 SDK 默认静默
+     * 
+     * @param enabled true=启用日志, false=禁用日志
+     */
+    static void NETEASE_API SetGlobalLogging(bool enabled);
+    
+    /**
+     * 设置日志级别
+     * @param level 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG
+     */
+    static void NETEASE_API SetGlobalLogLevel(int level);
+
+    /**
+     * @brief 彻底静默一切输出 (v0.1.2)
+     * 将 stderr 重定向到 NUL，压制包括 WebSocket 在内的所有库输出
+     */
+    static void NETEASE_API SetAbsoluteSilence(bool enable);
 
 private:
     /**
