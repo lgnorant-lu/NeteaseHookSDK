@@ -26,6 +26,11 @@ set_target_properties(NeteaseMonitor PROPERTIES
     WIN32_EXECUTABLE $<IF:$<CONFIG:Release>,TRUE,FALSE>
 )
 
+# v0.1.2: 如果在 WIN32 子系统下使用 main()，需要显式指定入口点
+if(MSVC)
+    target_link_options(NeteaseMonitor PRIVATE "$<$<CONFIG:Release>:/ENTRY:mainCRTStartup>")
+endif()
+
 # 调试：打印路径
 message(STATUS "raylib_SOURCE_DIR: ${raylib_SOURCE_DIR}")
 

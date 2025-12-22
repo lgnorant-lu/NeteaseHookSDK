@@ -457,6 +457,19 @@ void CustomRaylibLogCallback(int logLevel, const char* text, va_list args) {
     }
 }
 
+// v0.1.2: 基础 Win32 弹窗辅助，避免包含 windows.h 导致符号污染
+#ifdef _WIN32
+extern "C" __declspec(dllimport) int __stdcall MessageBoxA(void*, const char*, const char*, unsigned int);
+#endif
+
+void ShowFatalError(const char* title, const char* message) {
+    LOG_ERROR("[" << title << "] " << message);
+#ifdef _WIN32
+    // 仅在无控制台模式下（Release）或显式静默时显示弹窗
+    MessageBoxA(nullptr, message, title, 0x00000010L); // MB_ICONERROR
+#endif
+}
+
 int main(int argc, char* argv[]) {
     // v0.1.2: 立即禁用所有日志，防止启动时输出
     SetTraceLogLevel(LOG_NONE);                // Raylib 日志
@@ -522,7 +535,11 @@ int main(int argc, char* argv[]) {
     SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_TRANSPARENT | FLAG_WINDOW_TOPMOST);
     InitWindow(UIConstants::COMPACT_WIDTH, UIConstants::COMPACT_HEIGHT, "NCM Widget v0.1.2");
     
-    // v0.1.2: 窗口初始化完成
+    if (!IsWindowReady()) {
+        ShowFatalError("Raylib 错误", "无法初始化图形窗口。请确保显卡驱动已正确安装。");
+        return 1;
+    }
+
     SetTargetFPS(60); 
 
     // 2. 加载着色器 (修复路径搜索逻辑)
