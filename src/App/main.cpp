@@ -21,6 +21,9 @@
 #include <optional>
 #include <iostream>
 #include <chrono>
+#include <set>
+#include <iomanip>
+#include <sstream>
 
 #if defined(_MSC_VER)
 #pragma execution_character_set("utf-8")
@@ -29,6 +32,7 @@
 #define LOG_TAG "MAIN"
 #include "SharedData.hpp"
 #include "SimpleLog.h"
+#include "Utils/FontManager.h"  // v0.1.3: Refactored font management
 
 // === UI 布局常量 (集中管理魔法数字) ===
 namespace UIConstants {
@@ -172,6 +176,19 @@ struct SongCache {
     Texture2D coverTexture = {0};   // 专辑封面OpenGL纹理（0表示未加载）
     bool isLoading = false;         // 异步加载标志（防止重复请求）
 } static g_SongCache;
+
+/**
+ * === 动态字体管理器 (v0.1.3) ===
+ * 
+ * 两层架构解决 Raylib 字体纹理限制问题:
+ * - baseFont: 启动时加载，包含 UI 静态文本字符
+ * - dynamicFont: 切歌时动态生成，包含当前歌词/标题所需字符
+ * 
+ * 关键: 使用 LoadCodepoints() 从实际文本提取码点，避免预加载过多字符
+ */
+
+// v0.1.3: 新的 FontManager 类
+static Netease::FontManager g_FontMgr;
 
 /**
  * === 唱片旋转动画系统 ===
@@ -446,6 +463,11 @@ void OnTrackChanged(const std::string& songId) {
     // 注意：不要在这里直接调用 Raylib 绘图函数，因为这是后台线程
 }
 
+
+// ===== v0.1.2: 字体管理 =====
+// v0.1.3: 所有字体功能已迁移到 Netease::FontManager 类 (Utils/FontManager.h)
+
+// 重新加载动态字体（歌曲切换时调用）
 // v0.1.2: 自定义 Raylib 日志回调 (用于文件重定向)
 static FILE* g_LogFile = nullptr;
 void CustomRaylibLogCallback(int logLevel, const char* text, va_list args) {
@@ -496,7 +518,7 @@ int main(int argc, char* argv[]) {
     
     // 如果请求帮助，输出帮助信息并立即退出（不初始化任何资源）
     if (helpRequested) {
-        std::cout << "NeteaseHookSDK Monitor v0.1.2\n";
+        std::cout << "NeteaseHookSDK Monitor v0.1.3\n";
         std::cout << "\nUsage: NeteaseMonitor.exe [options]\n";
         std::cout << "\nOptions:\n";
         std::cout << "  --verbose, -v      Enable verbose logging\n";
@@ -533,7 +555,7 @@ int main(int argc, char* argv[]) {
 
     // 1. 设置窗口标志：无边框 + 透明 + 顶层
     SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_TRANSPARENT | FLAG_WINDOW_TOPMOST);
-    InitWindow(UIConstants::COMPACT_WIDTH, UIConstants::COMPACT_HEIGHT, "NCM Widget v0.1.2");
+    InitWindow(UIConstants::COMPACT_WIDTH, UIConstants::COMPACT_HEIGHT, "NCM Widget v0.1.3");
     
     if (!IsWindowReady()) {
         ShowFatalError("Raylib 错误", "无法初始化图形窗口。请确保显卡驱动已正确安装。");
@@ -597,38 +619,49 @@ int main(int argc, char* argv[]) {
     Color THEME_BAR_BG = { 255, 255, 255, 40 };
     Color THEME_RED = { 255, 58, 58, 255 };        // 保留红作为辅助色或Toast
 
-    // 3. 加载中文字体 
-    int codepointCount = 95 + (0x9FFF - 0x4E00 + 1);
-    int* codepoints = (int*)malloc(codepointCount * sizeof(int));
-    for (int i = 0; i < 95; i++) codepoints[i] = 32 + i;
-    for (int i = 0; i < (0x9FFF - 0x4E00 + 1); i++) codepoints[95 + i] = 0x4E00 + i;
+    // ===== v0.1.3: 动态字体系统初始化 =====
+    // 使用两层架构解决 Raylib 字体纹理限制
+    // - 基础字体: UI 静态文本 (启动时加载)
+    // - 动态字体: 歌曲内容 (切歌时重载)
     
-    // 3. 加载中文字体 - 多重后备机制
-    Font font = LoadFontEx("C:/Windows/Fonts/simhei.ttf", 20, codepoints, codepointCount);
-    if (font.baseSize == 0) font = LoadFontEx("C:/Windows/Fonts/msyh.ttc", 20, codepoints, codepointCount);
-    if (font.baseSize == 0) font = LoadFontEx("C:/Windows/Fonts/simsun.ttc", 20, codepoints, codepointCount);
-    if (font.baseSize == 0) font = GetFontDefault();
-    SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
-    free(codepoints);
-
-    // 辅助绘制函数
+    // v0.1.3: 使用 FontManager 初始化
+    g_FontMgr.SetVerboseLogging(true);  // 启用详细日志便于调试
+    if (!g_FontMgr.Initialize(Netease::FontQuality::MEDIUM)) {
+        LOG_WARN("[Font] 基础字体加载不完整，UI 可能显示异常");
+    }
+    
+    // DEBUG: 测试 Raylib LoadCodepoints 是否能处理硬编码的 UTF-8
+    {
+        const char* testStr = "\xe5\xa4\x9c\xe7\xa9\xba"; // "夜空" 硬编码 UTF-8
+        int count = 0;
+        int* cps = LoadCodepoints(testStr, &count);
+        if (cps) {
+            LOG_INFO("[Font] Raylib UTF-8测试成功: 提取了 " << count << " 个码点从硬编码字符串");
+            UnloadCodepoints(cps);
+        } else {
+            LOG_ERROR("[Font] Raylib UTF-8测试失败: LoadCodepoints返回NULL!");
+        }
+    }
+    
+    // 辅助绘制函数 - 使用动态字体管理器
     auto DrawUI = [&](const char* text, int x, int y, int size, Color color) {
+        const Font& font = g_FontMgr.GetActiveFont();  // v0.1.3: FontManager returns const ref
         float energyPulse = Netease::Visualizer::Instance().GetEnergyPulse();
         
         // 动态呼吸光 (Pulse Glow) - 仅当有音频脉冲时
         if (energyPulse > 0.2f) {
             float glowAlpha = (energyPulse - 0.2f) * 0.4f * (color.a / 255.0f);
-            DrawTextEx(font, text, Vector2{(float)x, (float)y}, (float)size, 1.0f, ColorAlpha(THEME_PRIMARY, glowAlpha));
+            g_FontMgr.DrawTextSafe(text, Vector2{(float)x, (float)y}, (float)size, 1.0f, ColorAlpha(THEME_PRIMARY, glowAlpha));
             // 二次发光增强边缘
-            DrawTextEx(font, text, Vector2{(float)x, (float)y}, (float)size, 1.0f, ColorAlpha(WHITE, glowAlpha * 0.5f));
+            g_FontMgr.DrawTextSafe(text, Vector2{(float)x, (float)y}, (float)size, 1.0f, ColorAlpha(WHITE, glowAlpha * 0.5f));
         }
 
-        DrawTextEx(font, text, Vector2{(float)x+1.5f, (float)y+1.5f}, (float)size, 1.0f, ColorAlpha(BLACK, 0.4f * (color.a / 255.0f)));
-        DrawTextEx(font, text, Vector2{(float)x, (float)y}, (float)size, 1.0f, color);
+        g_FontMgr.DrawTextSafe(text, Vector2{(float)x+1.5f, (float)y+1.5f}, (float)size, 1.0f, ColorAlpha(BLACK, 0.4f * (color.a / 255.0f)));
+        g_FontMgr.DrawTextSafe(text, Vector2{(float)x, (float)y}, (float)size, 1.0f, color);
     };
 
     auto DrawUICentered = [&](const char* text, int centerX, int centerY, int size, Color color) {
-        Vector2 textSize = MeasureTextEx(font, text, (float)size, 1.0f);
+        Vector2 textSize = g_FontMgr.MeasureTextSafe(text, (float)size, 1.0f);
         int x = centerX - (int)textSize.x / 2;
         int y = centerY - (int)textSize.y / 2;
         DrawUI(text, x, y, size, color);
@@ -935,6 +968,21 @@ int main(int argc, char* argv[]) {
                           << "ms | Cover=" << coverDuration 
                           << "ms | Total=" << totalDuration << "ms");
                 
+                // v0.1.3: 重载动态字体以支持歌曲特定字符
+                std::string title = g_SongCache.meta ? g_SongCache.meta->title : "";
+                std::string artist = (g_SongCache.meta && !g_SongCache.meta->artists.empty()) 
+                    ? g_SongCache.meta->artists[0] : "";
+                // v0.1.3: 使用 FontManager 动态更新字体
+                std::vector<std::string> lyricTexts;
+                for (const auto& line : g_SongCache.lyrics.lines) {
+                    lyricTexts.push_back(line.text);
+                    lyricTexts.push_back(line.translation);
+                }
+                auto result = g_FontMgr.UpdateDynamic(title, artist, lyricTexts);
+                if (!result.IsHealthy()) {
+                    LOG_WARN("[Font] 动态字体覆盖率: " << result.coverage * 100 << "%");
+                }
+                
                 g_SongCache.isLoading = false;
                 
                 // 更新Toast显示歌曲名
@@ -1127,9 +1175,9 @@ int main(int argc, char* argv[]) {
             g_SongCache.lyrics.scrollOffset += (targetScroll - g_SongCache.lyrics.scrollOffset) * 0.1f;
             
             if (g_SongCache.isLoading) {
-                DrawUICentered("正在获取歌词...", lyricCenterX, lyricZoneY, 15, ColorAlpha(THEME_PRIMARY, 0.6f));
+                DrawUICentered("Loading lyrics...", lyricCenterX, lyricZoneY, 15, ColorAlpha(THEME_PRIMARY, 0.6f));
             } else if (g_SongCache.lyrics.lines.empty()) {
-                DrawUICentered("暂无歌词", lyricCenterX, lyricZoneY, 16, ColorAlpha(WHITE, 0.4f));
+                DrawUICentered("No Lyrics", lyricCenterX, lyricZoneY, 16, ColorAlpha(WHITE, 0.4f));
             } else {
                 int linesToShow = (g_Layout.state == STATE_EXPANDED) ? 7 : 5;
                 int half = linesToShow / 2;
@@ -1164,7 +1212,7 @@ int main(int argc, char* argv[]) {
                         double lineProgress = (state.currentProgress - line.timestamp) / lineDuration;
                         lineProgress = fmin(fmax(lineProgress, 0.0), 1.0);
                         
-                        Vector2 textSize = MeasureTextEx(font, line.text.c_str(), (float)fontSize, 1.0f);
+                        Vector2 textSize = MeasureTextEx(g_FontMgr.GetActiveFont(), line.text.c_str(), (float)fontSize, 1.0f);
                         int textX = lyricCenterX - (int)textSize.x / 2;
                         int textY = (int)drawY - (int)textSize.y / 2;
                             int fillWidth = (int)(textSize.x * lineProgress);
@@ -1195,7 +1243,7 @@ int main(int argc, char* argv[]) {
             DrawCircleV(Vector2{knobX, barY + 2}, 2, THEME_PRIMARY);
             
             std::string timeStr = FormatTime(state.currentProgress) + " / " + FormatTime(state.totalDuration);
-            DrawTextEx(font, timeStr.c_str(), Vector2{barPadding, barY - 15}, 11, 1.0f, THEME_SECONDARY);
+            DrawTextEx(g_FontMgr.GetActiveFont(), timeStr.c_str(), Vector2{barPadding, barY - 15}, 11, 1.0f, THEME_SECONDARY);
             
             // --- 3. 响应式频谱装饰 ---
             float specX = (g_Layout.state == STATE_EXPANDED) ? rightX + 85 : g_Layout.currentWidth - 80;
@@ -1213,13 +1261,13 @@ int main(int argc, char* argv[]) {
             Color toastBg = { 50, 50, 50, (unsigned char)(200 * g_Toast.alpha) };
             Color toastText = { 255, 255, 255, (unsigned char)(255 * g_Toast.alpha) };
             
-            int textWidth = (int)MeasureTextEx(font, g_Toast.message.c_str(), 18, 1).x;
+            int textWidth = (int)MeasureTextEx(g_FontMgr.GetActiveFont(), g_Toast.message.c_str(), 18, 1).x;
             int toastW = textWidth + 40;
             int toastX = ((int)g_Layout.currentWidth - toastW) / 2;
             int toastY = (int)g_Layout.currentHeight - 80;  // 底部显示 (避开进度条)
             
             DrawRectangleRounded(Rectangle{(float)toastX, (float)toastY, (float)toastW, 28}, 0.5f, 10, toastBg);
-            DrawTextEx(font, g_Toast.message.c_str(), Vector2{(float)(toastX + 20), (float)(toastY + 5)}, 18, 1, toastText);
+            DrawTextEx(g_FontMgr.GetActiveFont(), g_Toast.message.c_str(), Vector2{(float)(toastX + 20), (float)(toastY + 5)}, 18, 1, toastText);
         }
 
         // --- DEBUG: 内存使用显示 ---
@@ -1249,8 +1297,8 @@ int main(int argc, char* argv[]) {
     if (g_GlassShader.id != 0) UnloadShader(g_GlassShader);
     if (g_AuroraShader.id != 0) UnloadShader(g_AuroraShader);
     
-    // 释放字体
-    UnloadFont(font);
+    // 释放字体 (两层架构)
+    // v0.1.3: FontManager 析构函数会自动释放字体，无需手动清理
     
     CloseWindow();
     return 0;

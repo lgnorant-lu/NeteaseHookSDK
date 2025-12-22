@@ -56,10 +56,8 @@ target_compile_definitions(NeteaseDriver PRIVATE
 # ============================================================
 # 安装规则
 # ============================================================
-
-install(TARGETS NeteaseDriver
-    ARCHIVE DESTINATION lib
-)
+# 注意：安装规则已统一移至根 CMakeLists.txt (Line 108-112)
+# 这里保留头文件的安装规则以保持模块独立性
 
 install(DIRECTORY include/
     DESTINATION include

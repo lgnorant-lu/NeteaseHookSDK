@@ -1,4 +1,6 @@
-# 设计与架构说明书 (Technical Design Document)
+# 设计与架构说明书 (Technical Design Document) [v0.1.2]
+
+**版本**: 0.1.2 | **文档状态**: Stable | **最后更新**: 2025-12-22
 
 ## 1. 架构总览 (System Architecture)
 

@@ -1,4 +1,4 @@
-# 网易云音乐 Hook SDK v0.1.2
+# 网易云音乐 Hook SDK v0.1.3
 # ============================================================
 # 
 # 项目说明：
@@ -13,7 +13,7 @@
 # ============================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(NeteaseHookSDK VERSION 0.1.2 LANGUAGES CXX)
+project(NeteaseHookSDK VERSION 0.1.3 LANGUAGES CXX)
 
 # 支持多架构构建 (x86/x64)
 # 使用 cmake -A x64 或 -A Win32 来指定目标架构
@@ -111,10 +111,13 @@ install(TARGETS NeteaseDriver version NeteaseMonitor
     ARCHIVE DESTINATION lib/${ARCH_SUFFIX}
 )
 
-# 安装头文件
+# 安装头文件 (v0.1.3: 补全缺失的接口头文件)
 install(FILES 
     src/Driver/include/NeteaseDriver.h
+    src/Utils/NeteaseAPI.h               # v0.1.0 新增 WebAPI 接口
+    src/Driver/include/LogRedirect.h     # v0.1.2 新增物理重定向工具
     src/Shared/SharedData.hpp
+    src/Shared/SimpleLog.h               # v0.1.2 标准化日志系统
     DESTINATION include
 )
 

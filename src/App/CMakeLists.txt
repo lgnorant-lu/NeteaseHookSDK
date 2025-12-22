@@ -18,6 +18,7 @@ add_executable(NeteaseMonitor
     Visualizer.h
     MemoryMonitor.h
     MemoryMonitor.cpp
+    ../Utils/FontManager.cpp  # v0.1.3: Refactored font management
 )
 
 # v0.1.2: Release 构建使用 WIN32 子系统 (隐藏控制台窗口)
@@ -41,6 +42,7 @@ target_include_directories(NeteaseMonitor PRIVATE
     ${raylib_SOURCE_DIR}/src/external
     ${CMAKE_SOURCE_DIR}/src/Shared
     ${CMAKE_SOURCE_DIR}/src/Driver/include
+    ${CMAKE_SOURCE_DIR}/include  # v0.1.3: FontManager.h
 )
 
 # 链接 Driver 库、Raylib 和 WinINet

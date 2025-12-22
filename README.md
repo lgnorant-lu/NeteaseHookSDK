@@ -1,4 +1,4 @@
-# NeteaseHookSDK (v0.1.2)
+# NeteaseHookSDK (v0.1.3)
 
 **[状态: BETA]** **[架构: Hybrid (CDP + WebAPI)]** **[平台: Windows x86/x64]**
  
@@ -11,7 +11,7 @@ NeteaseHookSDK 是针对网易云音乐 (Netease Cloud Music) 桌面客户端的
 
 通过利用 Electron 框架内置的 Chrome DevTools Protocol (CDP) 调试接口，本项目构建了一个非侵入式的 IPC 桥接层，同时结合轻量级 WebAPI 客户端，实现了**“状态监听 + 数据补全”**的双模工作流。
 
-**版本**: 0.1.2 (Integration Beta)
+**版本**: 0.1.3 (Integration Beta)
 
 ## 2. 技术规格
 
@@ -50,6 +50,11 @@ SDK 驱动层通过 WebSocket 连接至渲染进程，动态注入代码注册 `
 ### 3.6 健壮性与稳定性 (Robustness)
 *   **端口冲突识别**: 自动检测 9222 端口是否被非网易云程序占用（如 Chrome 调试页、验证码 Mock 等）。
 *   **重连退避机制 (Backoff)**: 驱动层与应用层重连间隔优化为 3s，彻底解决连接失败时的“死循环刷屏”问题。
+
+### 3.7 字符渲染完整性 (Character Rendering) [v0.1.3]
+*   **扩展码点覆盖**: 字体加载范围增至 **21,391 个码点**，涵盖 CJK 符号与标点 (`0x3000-0x303F`) 及全角 ASCII (`0xFF00-0xFFEF`)。
+*   **中文标点修复**: 彻底解决歌词中全角句号（。）、问号（？）、感叹号（！）显示为"?"的乱码问题。
+*   **智能字体回退**: 优先加载 `msyh.ttc`（微软雅黑），自动降级至 `simhei/simsun`，最终兜底至 Raylib 默认字体。
 
 ## 4. 构建与部署
 
@@ -143,7 +148,7 @@ bool Netease_InstallHook(const char* dllPath);
 从 GitHub Release 下载的压缩包 (`.zip`) 解压后包含以下目录：
  
 ```text
-NeteaseHookSDK-v0.1.2/
+NeteaseHookSDK-v0.1.3/
 ├── bin/
 │   ├── x86/              # [32位]
 │   │   ├── NeteaseMonitor.exe  # Demo 应用

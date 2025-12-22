@@ -19,7 +19,4 @@ set_target_properties(version PROPERTIES
 # C++17
 target_compile_features(version PRIVATE cxx_std_17)
 
-# 安装规则
-install(TARGETS version
-    RUNTIME DESTINATION bin
-)
+# 安装规则已统一移至根 CMakeLists.txt (Line 108-112)

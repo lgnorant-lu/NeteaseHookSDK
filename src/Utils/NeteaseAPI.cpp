@@ -514,6 +514,30 @@ std::string API::ExtractJsonValue(const std::string& json, const std::string& ke
                     case 'n': value += '\n'; break;
                     case 'r': value += '\r'; break;
                     case 't': value += '\t'; break;
+                    case 'u': {  // Unicode 转义序列 \uXXXX (修复中文显示)
+                        if (i + 4 < json.length()) {
+                            std::string hexStr = json.substr(i + 1, 4);
+                            try {
+                                int codepoint = std::stoi(hexStr, nullptr, 16);
+                                
+                                // 转换为 UTF-8
+                                if (codepoint <= 0x7F) {
+                                    value += (char)codepoint;
+                                } else if (codepoint <= 0x7FF) {
+                                    value += (char)(0xC0 | (codepoint >> 6));
+                                    value += (char)(0x80 | (codepoint & 0x3F));
+                                } else if (codepoint <= 0xFFFF) {
+                                    value += (char)(0xE0 | (codepoint >> 12));
+                                    value += (char)(0x80 | ((codepoint >> 6) & 0x3F));
+                                    value += (char)(0x80 | (codepoint & 0x3F));
+                                }
+                                i += 4; // 跳过已处理的4位十六进制
+                            } catch (...) {
+                                value += c; // 解析失败，保留原字符
+                            }
+                        }
+                        break;
+                    }
                     default: value += c; break;
                 }
                 escaped = false;
